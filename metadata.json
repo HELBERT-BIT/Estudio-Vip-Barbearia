@@ -1,0 +1,6 @@
+{
+  "name": "Estúdio VIP Barbearia - Coxim MS",
+  "description": "Sistema de agendamento online e gestão para a Estúdio VIP Barbearia em Coxim - MS. Serviços, horários, pagamentos e regras de pontualidade.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
