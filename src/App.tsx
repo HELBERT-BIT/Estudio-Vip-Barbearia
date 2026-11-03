@@ -6,6 +6,7 @@ import { ClientView } from './components/client/ClientView';
 import { AdminView } from './components/admin/AdminView';
 import { AuthModal } from './components/client/AuthModal';
 import { AdminNotificationsModal } from './components/admin/AdminNotificationsModal';
+import { FloatingNavDock } from './components/navigation/FloatingNavDock';
 import { 
   MapPin, 
   Phone, 
@@ -49,7 +50,7 @@ const BarbershopApp: React.FC = () => {
       />
 
       {/* Conteúdo Dinâmico da Aplicação (z-10, sobreposto à imagem de fundo) */}
-      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6 pb-24 md:pb-12">
+      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6 pb-32 sm:pb-28 md:pb-24">
         {activeView === 'client' ? <ClientView /> : <AdminView />}
       </main>
 
@@ -146,6 +147,7 @@ const BarbershopApp: React.FC = () => {
       {/* Modais Globais & Toasts */}
       <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
       <AdminNotificationsModal isOpen={notificationsModalOpen} onClose={() => setNotificationsModalOpen(false)} />
+      <FloatingNavDock />
       <ToastContainer />
     </div>
   );

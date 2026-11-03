@@ -863,7 +863,14 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
                 </span>
               </div>
 
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none touch-pan-x scroll-smooth overscroll-x-contain">
+              <div 
+                onWheel={(e) => {
+                  if (e.deltaY !== 0 && e.currentTarget.scrollWidth > e.currentTarget.clientWidth) {
+                    e.currentTarget.scrollLeft += e.deltaY;
+                  }
+                }}
+                className="flex gap-2 overflow-x-auto pb-2 scrollbar-none touch-pan-x scroll-smooth overscroll-x-contain"
+              >
                 {upcomingDays.map((day) => {
                   const isSelected = selectedDate === day.dateStr;
                   return (

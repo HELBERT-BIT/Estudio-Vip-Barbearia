@@ -69,7 +69,14 @@ export const ClientView: React.FC = () => {
       {/* ========================================================================= */}
       {/* BARRA DE NAVEGAÇÃO DE ABAS SUPERIOR (Mobile & Desktop)                    */}
       {/* ========================================================================= */}
-      <div className="flex border-b border-zinc-800/80 gap-2 pb-2 overflow-x-auto scrollbar-none touch-pan-x overscroll-x-contain">
+      <div 
+        onWheel={(e) => {
+          if (e.deltaY !== 0 && e.currentTarget.scrollWidth > e.currentTarget.clientWidth) {
+            e.currentTarget.scrollLeft += e.deltaY;
+          }
+        }}
+        className="flex flex-nowrap md:flex-wrap border-b border-zinc-800/80 gap-2 pb-2.5 overflow-x-auto md:overflow-x-visible scrollbar-none touch-pan-x overscroll-x-contain scroll-smooth"
+      >
         <button
           onClick={() => setClientActiveTab('home')}
           className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${

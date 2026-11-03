@@ -111,7 +111,14 @@ export const AdminView: React.FC = () => {
       {/* Top action bar: Tabs + Push Notification + Reset Test Data + Logout */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-zinc-800 gap-3 pb-3">
         {/* Navigation Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1 lg:pb-0">
+        <div 
+          onWheel={(e) => {
+            if (e.deltaY !== 0 && e.currentTarget.scrollWidth > e.currentTarget.clientWidth) {
+              e.currentTarget.scrollLeft += e.deltaY;
+            }
+          }}
+          className="flex items-center gap-1.5 flex-nowrap md:flex-wrap overflow-x-auto md:overflow-x-visible scrollbar-none pb-1 lg:pb-0"
+        >
           {tabs.map((tab) => {
             const isActive = adminActiveTab === tab.id;
             return (

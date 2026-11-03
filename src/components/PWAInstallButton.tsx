@@ -24,19 +24,30 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   }
 
   const handleClick = async () => {
-    setIsPrompting(true);
-    try {
-      // Execute the native .prompt() on beforeinstallprompt
-      const result = await install();
-      if (result.success) {
-        setJustInstalled(true);
-        if (onInstalled) onInstalled();
-      } else if (!result.hasPrompt) {
-        // If beforeinstallprompt hasn't triggered yet or on iOS / desktop fallback, show guide
+    // 1. Verifica se o evento beforeinstallprompt está disponível
+    const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? window.__pwaDeferredPrompt : null);
+
+    if (promptEvent) {
+      setIsPrompting(true);
+      try {
+        // Executa o comando deferredPrompt.prompt() imediatamente ao clicar
+        await promptEvent.prompt();
+        const choiceResult = await promptEvent.userChoice;
+        if (choiceResult.outcome === 'accepted') {
+          setJustInstalled(true);
+          if (onInstalled) onInstalled();
+        }
+      } catch (err) {
+        console.warn('Erro ao executar deferredPrompt.prompt():', err);
+        // Fallback para o modal explicativo em caso de restrição do navegador
         setShowGuideModal(true);
+      } finally {
+        setIsPrompting(false);
       }
-    } finally {
-      setIsPrompting(false);
+    } else {
+      // Se o evento não estiver disponível no navegador (como no iPhone ou em bloqueios do sistema),
+      // mantém o pop-up com o passo a passo dos 3 pontinhos que já está funcionando.
+      setShowGuideModal(true);
     }
   };
 
