@@ -60,40 +60,40 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
     <>
       <header className="sticky top-0 z-40 w-full bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80">
       {/* Top micro banner with business status & quick demo switch */}
-      <div className="bg-zinc-900/60 border-b border-zinc-800/40 px-4 py-1.5 text-xs">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 flex-wrap">
+      <div className="bg-zinc-900/60 border-b border-zinc-800/40 px-3 sm:px-4 py-1.5 text-xs">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
           {/* Status info */}
-          <div className="flex items-center gap-2">
-            <span className="flex h-2.5 w-2.5 relative">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink">
+            <span className="flex h-2 w-2 sm:h-2.5 sm:w-2.5 relative shrink-0">
               <span
                 className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
                   statusInfo.isOpen ? 'bg-emerald-400' : 'bg-rose-400'
                 }`}
               />
               <span
-                className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                className={`relative inline-flex rounded-full h-2 w-2 sm:h-2.5 sm:w-2.5 ${
                   statusInfo.isOpen ? 'bg-emerald-500' : 'bg-rose-500'
                 }`}
               />
             </span>
-            <span className={`font-semibold ${statusInfo.isOpen ? 'text-emerald-400' : 'text-rose-400'}`}>
+            <span className={`font-bold text-[11px] sm:text-xs shrink-0 ${statusInfo.isOpen ? 'text-emerald-400' : 'text-rose-400'}`}>
               {statusInfo.isOpen ? 'ABERTO' : 'FECHADO'}
             </span>
-            <span className="text-zinc-500">•</span>
-            <span className="text-zinc-300 font-medium truncate max-w-xs sm:max-w-none">
+            <span className="text-zinc-600 shrink-0">•</span>
+            <span className="text-zinc-300 font-medium truncate text-[11px] sm:text-xs">
               {statusInfo.message}
             </span>
-            <span className="hidden md:inline-block text-zinc-600">•</span>
-            <span className="hidden md:inline-block text-amber-400/90 font-medium">
-              ⏰ Tolerância de 10 min
+            <span className="hidden md:inline-block text-zinc-600 shrink-0">•</span>
+            <span className="hidden md:inline-block text-amber-400/90 font-medium whitespace-nowrap shrink-0">
+              ⏰ Tolerância 10 min
             </span>
           </div>
 
           {/* Quick role switcher for demo */}
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
             {/* If in admin view, show direct quick toggle button right in the top bar */}
             {activeView === 'admin' && (
-              <div className="flex items-center gap-1.5 bg-zinc-950 px-2 py-0.5 rounded-lg border border-zinc-800">
+              <div className="hidden xs:flex items-center gap-1.5 bg-zinc-950 px-2 py-0.5 rounded-lg border border-zinc-800 shrink-0">
                 <span className="text-[10px] text-zinc-400 font-medium">Porta:</span>
                 <button
                   onClick={() => setManualBarbershopStatus(statusInfo.isOpen ? 'closed' : 'open')}
@@ -105,15 +105,15 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
                   title="Clique para alternar o status da barbearia entre Aberta e Fechada"
                 >
                   <Power className="w-3 h-3" />
-                  <span>{statusInfo.isOpen ? 'Aberta (Desativar)' : 'Fechada (Ativar)'}</span>
+                  <span>{statusInfo.isOpen ? 'Aberta' : 'Fechada'}</span>
                 </button>
               </div>
             )}
 
-            <div className="bg-zinc-950 p-0.5 rounded-lg border border-zinc-800 flex items-center">
+            <div className="bg-zinc-950 p-0.5 rounded-lg border border-zinc-800 flex items-center shrink-0">
               <button
                 onClick={() => setActiveView('client')}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] sm:text-xs font-medium transition-all ${
                   activeView === 'client'
                     ? 'bg-amber-500 text-zinc-950 shadow-sm font-semibold'
                     : 'text-zinc-400 hover:text-zinc-200'
@@ -124,7 +124,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
               </button>
               <button
                 onClick={() => setActiveView('admin')}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] sm:text-xs font-medium transition-all ${
                   activeView === 'admin'
                     ? 'bg-amber-500 text-zinc-950 shadow-sm font-semibold'
                     : 'text-zinc-400 hover:text-zinc-200'
@@ -151,74 +151,76 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
             if (activeView === 'client') setClientActiveTab('home');
             else setAdminActiveTab('overview');
           }}
-          className="flex items-center gap-3 cursor-pointer group"
+          className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group shrink-0 min-w-0"
         >
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-700 p-0.5 shadow-lg shadow-amber-500/20 group-hover:scale-105 transition-transform">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-700 p-0.5 shadow-lg shadow-amber-500/20 group-hover:scale-105 transition-transform shrink-0">
             <div className="w-full h-full bg-zinc-950 rounded-[10px] flex items-center justify-center relative overflow-hidden">
               <Crown className="w-5 h-5 text-amber-400" />
             </div>
           </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-brand font-black text-lg tracking-wider text-zinc-100 uppercase group-hover:text-amber-400 transition-colors">
+          <div className="shrink-0 min-w-0">
+            <div className="flex items-baseline gap-1.5 flex-nowrap whitespace-nowrap">
+              <span className="font-brand font-black text-base sm:text-lg tracking-wider text-zinc-100 uppercase group-hover:text-amber-400 transition-colors whitespace-nowrap">
                 Estúdio VIP
               </span>
-              <span className="text-amber-500 font-brand font-semibold text-sm tracking-widest uppercase">
+              <span className="text-amber-500 font-brand font-bold text-xs sm:text-sm tracking-widest uppercase whitespace-nowrap">
                 Barbearia
               </span>
             </div>
-            <p className="text-[10px] text-zinc-400 tracking-wider font-medium truncate max-w-[170px] sm:max-w-none">
-              Coxim - MS • Estilo não é moda, é atitude!
+            <p className="text-[10px] text-zinc-400 tracking-wider font-medium whitespace-nowrap flex items-center gap-1">
+              <span className="text-amber-400/90 font-semibold">Coxim - MS</span>
+              <span className="hidden sm:inline text-zinc-500">•</span>
+              <span className="hidden sm:inline">Estilo não é moda, é atitude!</span>
             </p>
           </div>
         </div>
 
         {/* Center Navigation depending on activeView */}
         {activeView === 'client' ? (
-          <nav className="hidden md:flex items-center gap-1 bg-zinc-900/80 p-1 rounded-xl border border-zinc-800/80">
+          <nav className="hidden md:flex items-center gap-1 bg-zinc-900/80 p-1 rounded-xl border border-zinc-800/80 shrink-0">
             <button
               onClick={() => setClientActiveTab('home')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                 clientActiveTab === 'home'
                   ? 'bg-amber-500 text-zinc-950 shadow'
                   : 'text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/60'
               }`}
             >
-              <Home className="w-3.5 h-3.5" />
+              <Home className="w-3.5 h-3.5 shrink-0" />
               <span>Início</span>
             </button>
             <button
               onClick={() => setClientActiveTab('booking')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                 clientActiveTab === 'booking'
                   ? 'bg-amber-500 text-zinc-950 shadow'
                   : 'text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/60'
               }`}
             >
-              <CalendarDays className="w-3.5 h-3.5" />
-              <span>Agendar Horário</span>
+              <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+              <span>Agendar</span>
             </button>
             <button
               onClick={() => setClientActiveTab('services')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                 clientActiveTab === 'services'
                   ? 'bg-amber-500 text-zinc-950 shadow'
                   : 'text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/60'
               }`}
             >
-              <Scissors className="w-3.5 h-3.5" />
-              <span>Serviços &amp; Preços</span>
+              <Scissors className="w-3.5 h-3.5 shrink-0" />
+              <span>Serviços</span>
             </button>
             <button
               onClick={() => setClientActiveTab('my-appointments')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all relative ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap relative ${
                 clientActiveTab === 'my-appointments'
                   ? 'bg-amber-500 text-zinc-950 shadow'
                   : 'text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/60'
               }`}
             >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Meus Agendamentos</span>
+              <Clock className="w-3.5 h-3.5 shrink-0" />
+              <span>Meus Cortes</span>
               {clientActiveCount > 0 && (
                 <span className="ml-1 px-1.5 py-0.2 bg-amber-400 text-zinc-950 text-[10px] font-bold rounded-full">
                   {clientActiveCount}
@@ -227,29 +229,29 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
             </button>
             <button
               onClick={() => setClientActiveTab('announcements')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                 clientActiveTab === 'announcements'
                   ? 'bg-amber-500 text-zinc-950 shadow'
                   : 'text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/60'
               }`}
             >
-              <Megaphone className="w-3.5 h-3.5" />
-              <span>Mural de Avisos &amp; Novidades</span>
+              <Megaphone className="w-3.5 h-3.5 shrink-0" />
+              <span>Avisos</span>
             </button>
             <button
               onClick={() => setClientActiveTab('barber')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                 clientActiveTab === 'barber'
                   ? 'bg-amber-500 text-zinc-950 shadow'
                   : 'text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/60'
               }`}
             >
-              <Star className="w-3.5 h-3.5 fill-current text-amber-400" />
+              <Star className="w-3.5 h-3.5 fill-current text-amber-400 shrink-0" />
               <span>Barbeiro ({ratingStats.average}★)</span>
             </button>
           </nav>
         ) : (
-          <div className="hidden md:flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-2 shrink-0">
             <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5" />
               Painel do Dono
@@ -266,20 +268,20 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
         )}
 
         {/* Right side actions */}
-        <div className="flex items-center gap-2">
-          {/* Botão Visível de Instalar App da Barbearia (PWA) */}
-          <PWAInstallButton variant="navbar" className="hidden sm:inline-flex" />
-
-          {/* Status / Ação de Notificações Push do Cliente */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Botão de Ativar Avisos do Barbeiro no Topo */}
           {activeView === 'client' && (
-            <PushNotificationBanner variant="compact" className="hidden lg:flex" />
+            <PushNotificationBanner variant="button" className="hidden lg:flex" />
           )}
+
+          {/* Botão Visível de Instalar App da Barbearia (PWA) */}
+          <PWAInstallButton variant="navbar" />
 
           {/* Admin Notification Bell */}
           {activeView === 'admin' ? (
             <button
               onClick={onOpenNotifications}
-              className="relative p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-amber-400 hover:border-amber-500/40 transition-colors"
+              className="relative p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-amber-400 hover:border-amber-500/40 transition-colors shrink-0"
               title="Notificações do Dono"
             >
               <Bell className="w-5 h-5" />
@@ -292,9 +294,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
           ) : (
             <button
               onClick={onOpenAuth}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-amber-500/50 text-xs text-zinc-200 transition-all hover:bg-zinc-800/80"
+              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-amber-500/50 text-xs text-zinc-200 transition-all hover:bg-zinc-800/80 shrink-0"
             >
-              <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs">
+              <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs shrink-0">
                 {currentUser ? currentUser.name[0].toUpperCase() : <User className="w-3.5 h-3.5" />}
               </div>
               <div className="text-left hidden sm:block">
@@ -308,11 +310,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
             </button>
           )}
 
-          {/* Versão compacta no mobile do botão Instalar */}
-          <div className="sm:hidden">
-            <PWAInstallButton variant="navbar" className="text-[11px] px-2 py-1" />
-          </div>
-
           {/* Quick Reset Demo button */}
           <button
             onClick={() => {
@@ -320,7 +317,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
                 resetToDefaults();
               }
             }}
-            className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+            className="hidden sm:flex p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors shrink-0"
             title="Restaurar dados originais do Estúdio VIP Barbearia"
           >
             <RotateCcw className="w-4 h-4" />
@@ -329,7 +326,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
           {/* Mobile hamburger menu toggle */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300"
+            className="md:hidden p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 shrink-0"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -338,11 +335,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
 
       {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-zinc-950 border-b border-zinc-800 px-4 py-3 space-y-2 animate-in slide-in-from-top duration-200">
+        <div className="md:hidden bg-zinc-950 border-b border-zinc-800 px-4 py-3 space-y-2.5 animate-in slide-in-from-top duration-200">
           {/* Card destacado no menu mobile para instalar o app */}
-          <PWAInstallButton variant="menu" className="mb-3" />
+          <PWAInstallButton variant="menu" />
+
+          {/* Botão direto para ativar avisos do barbeiro no menu mobile */}
+          {activeView === 'client' && (
+            <PushNotificationBanner variant="button" className="w-full justify-center py-2.5" />
+          )}
+
           {activeView === 'client' ? (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 pt-1">
               <button
                 onClick={() => {
                   setClientActiveTab('home');
@@ -383,7 +386,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
                 }`}
               >
                 <Scissors className="w-4 h-4" />
-                Serviços &amp; Preços
+                Serviços
               </button>
               <button
                 onClick={() => {
@@ -397,7 +400,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
                 }`}
               >
                 <Clock className="w-4 h-4" />
-                Meus Agendamentos
+                Meus Cortes
               </button>
               <button
                 onClick={() => {
@@ -411,7 +414,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
                 }`}
               >
                 <Megaphone className="w-4 h-4" />
-                Mural de Avisos
+                Avisos
               </button>
               <button
                 onClick={() => {
@@ -425,7 +428,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
                 }`}
               >
                 <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                Perfil do Barbeiro &amp; Avaliações ({ratingStats.average}★)
+                Barbeiro ({ratingStats.average}★)
               </button>
             </div>
           ) : (

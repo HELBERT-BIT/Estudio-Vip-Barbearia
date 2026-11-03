@@ -79,14 +79,14 @@ export const ClientView: React.FC = () => {
       >
         <button
           onClick={() => setClientActiveTab('home')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
+          className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
             clientActiveTab === 'home'
               ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20'
               : 'text-zinc-400 hover:text-zinc-200 bg-zinc-900/60 hover:bg-zinc-800/60'
           }`}
         >
           <Home className="w-3.5 h-3.5" />
-          Início
+          <span>Início</span>
         </button>
 
         <button
@@ -94,62 +94,62 @@ export const ClientView: React.FC = () => {
             setPreSelectedServiceId(undefined);
             setClientActiveTab('booking');
           }}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
+          className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
             clientActiveTab === 'booking'
               ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20'
               : 'text-zinc-400 hover:text-zinc-200 bg-zinc-900/60 hover:bg-zinc-800/60'
           }`}
         >
           <CalendarDays className="w-3.5 h-3.5" />
-          Agendar Horário
+          <span>Agendar</span>
         </button>
 
         <button
           onClick={() => setClientActiveTab('services')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
+          className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
             clientActiveTab === 'services'
               ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20'
               : 'text-zinc-400 hover:text-zinc-200 bg-zinc-900/60 hover:bg-zinc-800/60'
           }`}
         >
           <Scissors className="w-3.5 h-3.5" />
-          Tabela de Serviços &amp; Preços
+          <span>Serviços</span>
         </button>
 
         <button
           onClick={() => setClientActiveTab('my-appointments')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
+          className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
             clientActiveTab === 'my-appointments'
               ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20'
               : 'text-zinc-400 hover:text-zinc-200 bg-zinc-900/50'
           }`}
         >
           <Clock className="w-3.5 h-3.5" />
-          Meus Agendamentos
+          <span>Meus Cortes</span>
         </button>
 
         <button
           onClick={() => setClientActiveTab('announcements')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
+          className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
             clientActiveTab === 'announcements'
               ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20'
               : 'text-zinc-400 hover:text-zinc-200 bg-zinc-900/50'
           }`}
         >
           <Megaphone className="w-3.5 h-3.5" />
-          Mural de Avisos
+          <span>Avisos</span>
         </button>
 
         <button
           onClick={() => setClientActiveTab('barber')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
+          className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
             clientActiveTab === 'barber'
               ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20'
               : 'text-zinc-400 hover:text-zinc-200 bg-zinc-900/50'
           }`}
         >
           <Star className="w-3.5 h-3.5 fill-current text-amber-400" />
-          Perfil &amp; Avaliações ({stats.average}★)
+          <span>Barbeiro ({stats.average}★)</span>
         </button>
       </div>
 

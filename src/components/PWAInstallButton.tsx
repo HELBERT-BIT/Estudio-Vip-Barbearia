@@ -67,11 +67,13 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
           type="button"
           onClick={handleClick}
           disabled={isPrompting}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-zinc-950 font-bold text-xs shadow-md shadow-amber-500/20 active:scale-95 transition-all cursor-pointer ${className}`}
+          className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-zinc-950 font-bold text-xs shadow-md shadow-amber-500/20 active:scale-95 transition-all cursor-pointer whitespace-nowrap shrink-0 ${className}`}
           title="Instalar App da Barbearia na Tela Inicial"
         >
           <Download className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" />
-          <span className="whitespace-nowrap">Instalar App da Barbearia</span>
+          <span className="hidden xl:inline">Instalar App da Barbearia</span>
+          <span className="hidden sm:inline xl:hidden">Instalar App</span>
+          <span className="sm:hidden text-[11px]">Instalar</span>
         </button>
       )}
 
