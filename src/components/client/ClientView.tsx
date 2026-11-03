@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   ArrowRight
 } from 'lucide-react';
+import { PWAInstallButton } from '../PWAInstallButton';
 
 export const ClientView: React.FC = () => {
   const { 
@@ -317,6 +318,9 @@ export const ClientView: React.FC = () => {
             </div>
           </div>
 
+          {/* Card / Banner de Instalação do App PWA */}
+          <PWAInstallButton variant="banner" />
+
           {/* Micro Banner de Aviso Importante caso configurado */}
           {importantAnnouncement && (
             <div 
@@ -374,14 +378,18 @@ export const ClientView: React.FC = () => {
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         onError={(e) => {
-                          (e.currentTarget as HTMLElement).style.display = 'none';
+                          const target = e.currentTarget as HTMLImageElement;
+                          target.style.display = 'none';
+                          const fallback = target.nextElementSibling as HTMLElement;
+                          if (fallback) fallback.style.display = 'flex';
                         }}
                       />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-amber-400/40">
-                        <Scissors className="w-10 h-10" />
-                      </div>
-                    )}
+                    ) : null}
+                    <div 
+                      className={`w-full h-full items-center justify-center bg-gradient-to-br from-zinc-900 to-zinc-950 text-amber-400 ${service.imageUrl ? 'hidden' : 'flex'}`}
+                    >
+                      <Scissors className="w-10 h-10 opacity-30" />
+                    </div>
                     <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
                     
                     <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500 text-zinc-950 shadow-md">

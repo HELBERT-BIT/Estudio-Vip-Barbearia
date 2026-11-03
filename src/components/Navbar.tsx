@@ -17,6 +17,7 @@ import {
   Star,
   Home
 } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface NavbarProps {
   onOpenAuth: () => void;
@@ -265,6 +266,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
 
         {/* Right side actions */}
         <div className="flex items-center gap-2">
+          {/* Botão Visível de Instalar App da Barbearia (PWA) */}
+          <PWAInstallButton variant="navbar" className="hidden sm:inline-flex" />
+
           {/* Admin Notification Bell */}
           {activeView === 'admin' ? (
             <button
@@ -298,6 +302,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
             </button>
           )}
 
+          {/* Versão compacta no mobile do botão Instalar */}
+          <div className="sm:hidden">
+            <PWAInstallButton variant="navbar" className="text-[11px] px-2 py-1" />
+          </div>
+
           {/* Quick Reset Demo button */}
           <button
             onClick={() => {
@@ -324,6 +333,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
       {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
         <div className="md:hidden bg-zinc-950 border-b border-zinc-800 px-4 py-3 space-y-2 animate-in slide-in-from-top duration-200">
+          {/* Card destacado no menu mobile para instalar o app */}
+          <PWAInstallButton variant="menu" className="mb-3" />
           {activeView === 'client' ? (
             <div className="grid grid-cols-2 gap-2">
               <button

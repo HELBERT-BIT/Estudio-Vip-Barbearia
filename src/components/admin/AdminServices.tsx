@@ -135,12 +135,16 @@ export const AdminServices: React.FC = () => {
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          (e.currentTarget as HTMLElement).style.display = 'none';
+                          const target = e.currentTarget as HTMLImageElement;
+                          target.style.display = 'none';
+                          const fallback = target.nextElementSibling as HTMLElement;
+                          if (fallback) fallback.style.display = 'flex';
                         }}
                       />
-                    ) : (
+                    ) : null}
+                    <div className={`w-full h-full items-center justify-center ${service.imageUrl ? 'hidden' : 'flex'}`}>
                       <Scissors className="w-5 h-5 text-zinc-600" />
-                    )}
+                    </div>
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -323,7 +327,7 @@ export const AdminServices: React.FC = () => {
                   </div>
                   <input
                     type="text"
-                    placeholder="URL ou caminho da imagem (ex: /src/assets/images/...)"
+                    placeholder="URL ou caminho da imagem (ex: /assets/images/...)"
                     value={imageUrl}
                     onChange={(e) => setImageUrl(e.target.value)}
                     className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-xs text-zinc-100 focus:outline-none focus:border-amber-500 font-mono text-[11px]"

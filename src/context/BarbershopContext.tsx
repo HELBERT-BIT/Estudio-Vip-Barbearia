@@ -153,9 +153,9 @@ interface BarbershopContextType {
 
 const BarbershopContext = createContext<BarbershopContextType | undefined>(undefined);
 
-// Updated storage key version to v6 for Mariano official Pix Nubank and dynamic duration slots
+// Storage keys - v8 ensures original bundled assets load seamlessly without 404s
 const STORAGE_KEYS = {
-  SERVICES: 'estudiovip_services_v6',
+  SERVICES: 'estudiovip_services_v8',
   SETTINGS: 'estudiovip_settings_v6',
   APPOINTMENTS: 'estudiovip_appointments_v6',
   ANNOUNCEMENTS: 'estudiovip_announcements_v6',
@@ -168,12 +168,15 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
   // Load state from localStorage or fallback to defaults
   const [services, setServices] = useState<BarberService[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.SERVICES);
+      const saved = localStorage.getItem(STORAGE_KEYS.SERVICES) || 
+        localStorage.getItem('estudiovip_services_v7') || 
+        localStorage.getItem('estudiovip_services_v6');
       if (saved) {
         const parsed: BarberService[] = JSON.parse(saved);
         return parsed.map((svc) => {
           const init = initialServices.find((s) => s.id === svc.id);
-          if (init && !svc.imageUrl) {
+          // If it is one of the official default services, ensure the bundled original image is used
+          if (init) {
             return { ...svc, imageUrl: init.imageUrl };
           }
           return svc;

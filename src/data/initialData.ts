@@ -7,6 +7,14 @@ import {
   BarberReview 
 } from '../types';
 
+// Original service images generated for Estúdio VIP
+import imgCorteSocial from '../assets/images/service_corte_social_1792966412779.jpg';
+import imgDegrade from '../assets/images/service_degrade_fade_1792966413077.jpg';
+import imgCorteMilitar from '../assets/images/service_corte_militar_1792966412944.jpg';
+import imgDesignBarba from '../assets/images/service_design_barba_1792966414138.jpg';
+import imgSobrancelha from '../assets/images/service_sobrancelha_1792966414916.jpg';
+import imgCorteTesoura from '../assets/images/service_corte_tesoura_1792966415129.jpg';
+
 // Helper to format date strings YYYY-MM-DD
 export const getTodayString = (): string => {
   const d = new Date();
@@ -36,7 +44,7 @@ export const initialServices: BarberService[] = [
     category: 'cabelo',
     active: true,
     popular: false,
-    imageUrl: '/src/assets/images/service_corte_social_1792966412779.jpg'
+    imageUrl: imgCorteSocial
   },
   {
     id: 'srv-degrade',
@@ -47,7 +55,7 @@ export const initialServices: BarberService[] = [
     category: 'cabelo',
     active: true,
     popular: true,
-    imageUrl: '/src/assets/images/service_degrade_fade_1792966413077.jpg'
+    imageUrl: imgDegrade
   },
   {
     id: 'srv-corte-militar',
@@ -58,7 +66,7 @@ export const initialServices: BarberService[] = [
     category: 'cabelo',
     active: true,
     popular: false,
-    imageUrl: '/src/assets/images/service_corte_militar_1792966412944.jpg'
+    imageUrl: imgCorteMilitar
   },
   {
     id: 'srv-design-barba',
@@ -69,7 +77,7 @@ export const initialServices: BarberService[] = [
     category: 'barba',
     active: true,
     popular: true,
-    imageUrl: '/src/assets/images/service_design_barba_1792966414138.jpg'
+    imageUrl: imgDesignBarba
   },
   {
     id: 'srv-sobrancelha',
@@ -80,7 +88,7 @@ export const initialServices: BarberService[] = [
     category: 'sobrancelha',
     active: true,
     popular: false,
-    imageUrl: '/src/assets/images/service_sobrancelha_1792966414916.jpg'
+    imageUrl: imgSobrancelha
   },
   {
     id: 'srv-corte-tesoura',
@@ -91,7 +99,7 @@ export const initialServices: BarberService[] = [
     category: 'cabelo',
     active: true,
     popular: true,
-    imageUrl: '/src/assets/images/service_corte_tesoura_1792966415129.jpg'
+    imageUrl: imgCorteTesoura
   }
 ];
 
