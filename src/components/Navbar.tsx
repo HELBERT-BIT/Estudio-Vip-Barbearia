@@ -18,6 +18,7 @@ import {
   Home
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
+import { PushNotificationBanner } from './notifications/PushNotificationBanner';
 
 interface NavbarProps {
   onOpenAuth: () => void;
@@ -268,6 +269,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
         <div className="flex items-center gap-2">
           {/* Botão Visível de Instalar App da Barbearia (PWA) */}
           <PWAInstallButton variant="navbar" className="hidden sm:inline-flex" />
+
+          {/* Status / Ação de Notificações Push do Cliente */}
+          {activeView === 'client' && (
+            <PushNotificationBanner variant="compact" className="hidden lg:flex" />
+          )}
 
           {/* Admin Notification Bell */}
           {activeView === 'admin' ? (

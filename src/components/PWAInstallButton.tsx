@@ -13,9 +13,10 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   className = '',
   onInstalled
 }) => {
-  const { isInstallable, isInstalled, isIOS, install, deferredPrompt } = usePWAInstall();
+  const { isInstalled, isIOS, install, deferredPrompt } = usePWAInstall();
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [justInstalled, setJustInstalled] = useState(false);
+  const [isPrompting, setIsPrompting] = useState(false);
 
   // If app is already running in standalone mode (already installed), hide or render minimal check
   if (isInstalled && !justInstalled) {
@@ -23,17 +24,30 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   }
 
   const handleClick = async () => {
-    if (deferredPrompt) {
-      const accepted = await install();
-      if (accepted) {
+    setIsPrompting(true);
+    try {
+      // Execute the native .prompt() on beforeinstallprompt
+      const result = await install();
+      if (result.success) {
         setJustInstalled(true);
         if (onInstalled) onInstalled();
+      } else if (!result.hasPrompt) {
+        // If beforeinstallprompt hasn't triggered yet or on iOS / desktop fallback, show guide
+        setShowGuideModal(true);
       }
-    } else {
-      // If beforeinstallprompt hasn't triggered yet or on iOS / other browsers, show guide
-      setShowGuideModal(true);
+    } finally {
+      setIsPrompting(false);
     }
   };
+
+  if (justInstalled) {
+    return (
+      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-bold text-xs animate-fadeIn">
+        <CheckCircle2 className="w-3.5 h-3.5" />
+        <span>App Instalado!</span>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -41,6 +55,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
         <button
           type="button"
           onClick={handleClick}
+          disabled={isPrompting}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-zinc-950 font-bold text-xs shadow-md shadow-amber-500/20 active:scale-95 transition-all cursor-pointer ${className}`}
           title="Instalar App da Barbearia na Tela Inicial"
         >
@@ -53,6 +68,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
         <button
           type="button"
           onClick={handleClick}
+          disabled={isPrompting}
           className={`w-full p-3 rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center justify-between transition-all cursor-pointer shadow-sm ${className}`}
         >
           <div className="flex items-center gap-2.5">
@@ -87,6 +103,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
           <button
             type="button"
             onClick={handleClick}
+            disabled={isPrompting}
             className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs shrink-0 flex items-center gap-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />

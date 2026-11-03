@@ -16,8 +16,10 @@ import {
   Search, 
   Filter, 
   DollarSign,
-  ChevronDown
+  ChevronDown,
+  BellRing
 } from 'lucide-react';
+import { AdminPushDispatcherModal } from './AdminPushDispatcherModal';
 
 export const AdminSchedule: React.FC = () => {
   const { 
@@ -44,6 +46,9 @@ export const AdminSchedule: React.FC = () => {
   const [paymentModalApt, setPaymentModalApt] = useState<Appointment | null>(null);
   const [selectedPayMethod, setSelectedPayMethod] = useState<PaymentMethod>('pix');
   const [selectedPayStatus, setSelectedPayStatus] = useState<PaymentStatus>('pago');
+
+  // Push notification modal state
+  const [pushModalApt, setPushModalApt] = useState<Appointment | null>(null);
 
   const todayStr = getTodayString();
 
@@ -159,8 +164,16 @@ export const AdminSchedule: React.FC = () => {
 
       {/* Appointment Cards List */}
       {filteredAppointments.length === 0 ? (
-        <div className="p-10 text-center bg-zinc-900 border border-zinc-800 rounded-2xl text-zinc-500 text-sm">
-          Nenhum agendamento encontrado com os filtros selecionados.
+        <div className="p-12 text-center bg-zinc-900 border border-zinc-800 rounded-3xl text-zinc-400 text-sm space-y-3">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+            <Calendar className="w-7 h-7" />
+          </div>
+          <div>
+            <h4 className="font-bold text-zinc-200 text-base">Agenda Zerada e Pronta</h4>
+            <p className="text-xs text-zinc-400 max-w-md mx-auto mt-1">
+              Nenhum agendamento no momento. Os horários estão liberados e prontos para os seus primeiros clientes reais!
+            </p>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
@@ -369,6 +382,16 @@ export const AdminSchedule: React.FC = () => {
                         <CreditCard className="w-3.5 h-3.5 text-amber-400" />
                         <span>Registrar Pagamento</span>
                       </button>
+
+                      {/* Push Notification directly to this client */}
+                      <button
+                        onClick={() => setPushModalApt(apt)}
+                        className="py-1.5 px-3 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 font-medium text-xs border border-amber-500/30 transition-colors flex items-center gap-1.5"
+                        title="Enviar notificação push de alteração de horário ou lembrete para este cliente"
+                      >
+                        <BellRing className="w-3.5 h-3.5" />
+                        <span>Notificar</span>
+                      </button>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -509,6 +532,15 @@ export const AdminSchedule: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Push Dispatcher Modal */}
+      {pushModalApt && (
+        <AdminPushDispatcherModal
+          isOpen={true}
+          onClose={() => setPushModalApt(null)}
+          preSelectedAppointmentId={pushModalApt.id}
+        />
       )}
     </div>
   );

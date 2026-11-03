@@ -23,6 +23,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { PWAInstallButton } from '../PWAInstallButton';
+import { PushNotificationBanner } from '../notifications/PushNotificationBanner';
 
 export const ClientView: React.FC = () => {
   const { 
@@ -320,6 +321,9 @@ export const ClientView: React.FC = () => {
 
           {/* Card / Banner de Instalação do App PWA */}
           <PWAInstallButton variant="banner" />
+
+          {/* Banner de Notificações Web Push (Alertas de Horários & Lembretes) */}
+          <PushNotificationBanner variant="banner" />
 
           {/* Micro Banner de Aviso Importante caso configurado */}
           {importantAnnouncement && (

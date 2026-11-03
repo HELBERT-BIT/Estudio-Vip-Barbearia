@@ -189,10 +189,20 @@ export const AdminReviewsManager: React.FC = () => {
       {/* Reviews List */}
       <div className="space-y-4">
         {filteredReviews.length === 0 ? (
-          <div className="p-10 text-center bg-zinc-900 border border-zinc-800 rounded-3xl text-zinc-400 space-y-2">
-            <Star className="w-10 h-10 text-zinc-600 mx-auto" />
-            <h4 className="font-bold text-zinc-200">Nenhuma avaliação encontrada para os filtros selecionados.</h4>
-            <p className="text-xs text-zinc-500">Tente alterar o filtro ou limpar os critérios de busca.</p>
+          <div className="p-12 text-center bg-zinc-900 border border-zinc-800 rounded-3xl text-zinc-400 space-y-3">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+              <Star className="w-7 h-7" />
+            </div>
+            <div>
+              <h4 className="font-bold text-zinc-200 text-base">
+                {reviews.length === 0 ? 'Sem Avaliações de Teste (Sistema Zerado)' : 'Nenhuma avaliação encontrada'}
+              </h4>
+              <p className="text-xs text-zinc-400 max-w-md mx-auto mt-1">
+                {reviews.length === 0
+                  ? 'Os dados de teste foram limpos. As avaliações reais dos seus clientes aparecerão aqui assim que realizarem o primeiro corte!'
+                  : 'Tente alterar o filtro de estrelas ou exibir avaliações ocultas.'}
+              </p>
+            </div>
           </div>
         ) : (
           filteredReviews.map((rev) => (

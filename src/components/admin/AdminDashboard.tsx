@@ -24,9 +24,13 @@ import {
   MessageSquare,
   Check,
   Star,
-  Sparkles
+  Sparkles,
+  BellRing,
+  Send
 } from 'lucide-react';
 import { AdminAnalyticsCharts } from './AdminAnalyticsCharts';
+import { AdminPushDispatcherModal } from './AdminPushDispatcherModal';
+import { AdminResetTestDataModal } from './AdminResetTestDataModal';
 
 export const AdminDashboard: React.FC = () => {
   const { 
@@ -42,8 +46,12 @@ export const AdminDashboard: React.FC = () => {
     getAvailableSlots,
     settings,
     reviews,
-    getBarberRatingStats
+    getBarberRatingStats,
+    isSystemCleaned
   } = useBarbershop();
+
+  const [pushModalOpen, setPushModalOpen] = useState(false);
+  const [resetModalOpen, setResetModalOpen] = useState(false);
 
   const ratingStats = getBarberRatingStats();
   const statusInfo = isOpenNow();
@@ -177,6 +185,76 @@ export const AdminDashboard: React.FC = () => {
               </button>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Central de Operações do Proprietário: Disparo de Alertas Push & Reset do Sistema */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Card 1: Disparo de Notificação Push aos Clientes */}
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-zinc-900 to-zinc-900 border border-amber-500/30 flex items-center justify-between gap-3 shadow-md">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+              <BellRing className="w-5 h-5 animate-pulse" />
+            </div>
+            <div className="min-w-0">
+              <h4 className="text-xs font-bold text-zinc-100 uppercase tracking-wider">
+                Notificações Push aos Clientes
+              </h4>
+              <p className="text-[11px] text-zinc-400 mt-0.5 line-clamp-1">
+                Dispare avisos de alteração de horário ou lembretes direto no celular dos clientes.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setPushModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-bold text-xs uppercase tracking-wider shrink-0 transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-amber-500/20"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Disparar Alerta</span>
+          </button>
+        </div>
+
+        {/* Card 2: Zerar Dados de Teste */}
+        <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-between gap-3 shadow-md">
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                isSystemCleaned
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+              }`}
+            >
+              <RotateCcw className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-bold text-zinc-100 uppercase tracking-wider">
+                  Dados de Teste da Barbearia
+                </h4>
+                {isSystemCleaned && (
+                  <span className="px-2 py-0.2 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    Zerado
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-zinc-400 mt-0.5 line-clamp-1">
+                {isSystemCleaned
+                  ? 'Agenda e avaliações limpas. Pronto para o 1º cliente real.'
+                  : 'Limpar apenas agendamentos e avaliações simuladas (mantém serviços e preços).'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setResetModalOpen(true)}
+            className={`px-3.5 py-2 rounded-xl font-bold text-xs uppercase tracking-wider shrink-0 transition-all cursor-pointer flex items-center gap-1.5 ${
+              isSystemCleaned
+                ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700'
+                : 'bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20'
+            }`}
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>{isSystemCleaned ? 'Zerar Novamente' : 'Limpar Dados'}</span>
+          </button>
         </div>
       </div>
 
@@ -813,6 +891,17 @@ export const AdminDashboard: React.FC = () => {
           <ChevronRight className="w-5 h-5 text-zinc-500 group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
         </div>
       </div>
+
+      {/* Operations Modals */}
+      <AdminPushDispatcherModal
+        isOpen={pushModalOpen}
+        onClose={() => setPushModalOpen(false)}
+      />
+
+      <AdminResetTestDataModal
+        isOpen={resetModalOpen}
+        onClose={() => setResetModalOpen(false)}
+      />
     </div>
   );
 };

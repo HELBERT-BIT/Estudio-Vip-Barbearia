@@ -146,8 +146,10 @@ interface BarbershopContextType {
   loginClient: (phoneOrEmail: string, name: string) => void;
   logoutClient: () => void;
 
-  // Demo Helpers
+  // Demo Helpers & Data Reset
   resetToDefaults: () => void;
+  resetTestData: () => void;
+  isSystemCleaned: boolean;
   simulateIncomingBooking: () => void;
 }
 
@@ -188,12 +190,22 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   });
 
+  const [isSystemCleaned, setIsSystemCleaned] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('estudiovip_clean_state_active') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
   const [reviews, setReviews] = useState<BarberReview[]>(() => {
     try {
+      const isCleaned = localStorage.getItem('estudiovip_clean_state_active') === 'true';
       const saved = localStorage.getItem(STORAGE_KEYS.REVIEWS);
-      return saved ? JSON.parse(saved) : initialReviews;
+      if (saved) return JSON.parse(saved);
+      return isCleaned ? [] : initialReviews;
     } catch {
-      return initialReviews;
+      return [];
     }
   });
 
@@ -229,10 +241,12 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
 
   const [appointments, setAppointments] = useState<Appointment[]>(() => {
     try {
+      const isCleaned = localStorage.getItem('estudiovip_clean_state_active') === 'true';
       const saved = localStorage.getItem(STORAGE_KEYS.APPOINTMENTS);
-      return saved ? JSON.parse(saved) : initialAppointments;
+      if (saved) return JSON.parse(saved);
+      return isCleaned ? [] : initialAppointments;
     } catch {
-      return initialAppointments;
+      return [];
     }
   });
 
@@ -247,10 +261,12 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
 
   const [notifications, setNotifications] = useState<AdminNotification[]>(() => {
     try {
+      const isCleaned = localStorage.getItem('estudiovip_clean_state_active') === 'true';
       const saved = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
-      return saved ? JSON.parse(saved) : initialNotifications;
+      if (saved) return JSON.parse(saved);
+      return isCleaned ? [] : initialNotifications;
     } catch {
-      return initialNotifications;
+      return [];
     }
   });
 
@@ -1299,7 +1315,7 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     };
   };
 
-  // Demo Helpers
+  // Demo Helpers & Data Reset
   const resetToDefaults = () => {
     setServices(initialServices);
     setSettings(initialSettings);
@@ -1307,8 +1323,31 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     setAnnouncements(initialAnnouncements);
     setNotifications(initialNotifications);
     setReviews(initialReviews);
+    setIsSystemCleaned(false);
+    localStorage.removeItem('estudiovip_clean_state_active');
     localStorage.clear();
-    showToast('Dados restaurados para o padrão do Estúdio VIP Barbearia!', 'info', 'Reset Completo');
+    showToast('Dados restaurados para o padrão original da barbearia!', 'info', 'Reset Completo');
+  };
+
+  /**
+   * Cleans all temporary test appointments, mock reviews, and simulation notifications.
+   * Keeps intact: All services, prices, photos, working hours, 10 min tolerance rule,
+   * PIX settings, and admin panel authentication!
+   */
+  const resetTestData = () => {
+    setAppointments([]);
+    setReviews([]);
+    setNotifications([]);
+    setIsSystemCleaned(true);
+    localStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify([]));
+    localStorage.setItem('estudiovip_clean_state_active', 'true');
+    showToast(
+      'Dados de teste limpos com sucesso! Agendamentos e avaliações simuladas foram apagados. Seus serviços, preços, regras e expediente permanecem 100% intactos.',
+      'success',
+      'Sistema Zerado para Clientes Reais'
+    );
   };
 
   const simulateIncomingBooking = () => {
@@ -1389,6 +1428,8 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
         loginClient,
         logoutClient,
         resetToDefaults,
+        resetTestData,
+        isSystemCleaned,
         simulateIncomingBooking,
         addReview,
         deleteReview,

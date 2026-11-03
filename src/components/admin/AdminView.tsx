@@ -9,6 +9,8 @@ import { AdminAnnouncements } from './AdminAnnouncements';
 import { AdminCancellationsLog } from './AdminCancellationsLog';
 import { AdminReviewsManager } from './AdminReviewsManager';
 import { AdminLogin } from './AdminLogin';
+import { AdminPushDispatcherModal } from './AdminPushDispatcherModal';
+import { AdminResetTestDataModal } from './AdminResetTestDataModal';
 import { 
   LayoutDashboard, 
   CalendarDays, 
@@ -17,26 +19,29 @@ import {
   DollarSign, 
   Megaphone, 
   ShieldAlert, 
-  Sparkles,
-  PlusCircle,
-  RotateCcw,
   Star,
-  LogOut
+  LogOut,
+  BellRing,
+  RotateCcw,
+  Sparkles
 } from 'lucide-react';
 
 export const AdminView: React.FC = () => {
   const { 
     adminActiveTab, 
     setAdminActiveTab, 
-    simulateIncomingBooking, 
     appointments,
     reviews,
+    isSystemCleaned,
     showToast
   } = useBarbershop();
 
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
     return sessionStorage.getItem('estudio_vip_admin_logged') === 'true';
   });
+
+  const [isPushModalOpen, setIsPushModalOpen] = useState(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
   const handleLogout = () => {
     sessionStorage.removeItem('estudio_vip_admin_logged');
@@ -103,16 +108,17 @@ export const AdminView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-16">
-      {/* Admin Navigation Pills */}
-      <div className="flex items-center justify-between border-b border-zinc-800 gap-2 pb-2 overflow-x-auto scrollbar-none">
-        <div className="flex items-center gap-1.5 shrink-0">
+      {/* Top action bar: Tabs + Push Notification + Reset Test Data + Logout */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-zinc-800 gap-3 pb-3">
+        {/* Navigation Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1 lg:pb-0">
           {tabs.map((tab) => {
             const isActive = adminActiveTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => setAdminActiveTab(tab.id)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
                   isActive
                     ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20'
                     : 'text-zinc-400 hover:text-zinc-200 bg-zinc-900/50 hover:bg-zinc-800'
@@ -134,14 +140,45 @@ export const AdminView: React.FC = () => {
           })}
         </div>
 
-        <button
-          onClick={handleLogout}
-          className="px-3 py-2 rounded-xl text-xs font-bold text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ml-auto shadow-sm"
-          title="Encerrar sessão de administrador"
-        >
-          <LogOut className="w-3.5 h-3.5" />
-          <span>Sair</span>
-        </button>
+        {/* Global Admin Tools: Push Alerts & Reset Test Data */}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {/* Botão de Disparo de Notificação Push */}
+          <button
+            type="button"
+            onClick={() => setIsPushModalOpen(true)}
+            className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/40 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+            title="Disparar notificação push aos clientes (alteração de horário, lembretes, avisos)"
+          >
+            <BellRing className="w-3.5 h-3.5" />
+            <span>Disparar Notificação</span>
+          </button>
+
+          {/* Botão de Limpar/Zerar Dados de Teste */}
+          <button
+            type="button"
+            onClick={() => setIsResetModalOpen(true)}
+            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shadow-sm cursor-pointer ${
+              isSystemCleaned
+                ? 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                : 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border-rose-500/40'
+            }`}
+            title="Apaga apenas agendamentos de teste e avaliações fictícias, deixando o sistema zerado para o primeiro cliente real"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>{isSystemCleaned ? 'Sistema Zerado' : 'Limpar Dados de Teste'}</span>
+          </button>
+
+          {/* Sair do Painel */}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="px-3 py-2 rounded-xl text-xs font-bold text-zinc-400 hover:text-rose-400 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-all flex items-center gap-1.5 cursor-pointer ml-auto"
+            title="Encerrar sessão de administrador"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sair</span>
+          </button>
+        </div>
       </div>
 
       {/* Admin Views */}
@@ -153,6 +190,17 @@ export const AdminView: React.FC = () => {
       {adminActiveTab === 'reviews' && <AdminReviewsManager />}
       {adminActiveTab === 'announcements' && <AdminAnnouncements />}
       {adminActiveTab === 'cancellations' && <AdminCancellationsLog />}
+
+      {/* Modals */}
+      <AdminPushDispatcherModal
+        isOpen={isPushModalOpen}
+        onClose={() => setIsPushModalOpen(false)}
+      />
+
+      <AdminResetTestDataModal
+        isOpen={isResetModalOpen}
+        onClose={() => setIsResetModalOpen(false)}
+      />
     </div>
   );
 };
