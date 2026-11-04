@@ -23,6 +23,8 @@ export const FloatingNavDock: React.FC = () => {
     setClientActiveTab,
     adminActiveTab,
     setAdminActiveTab,
+    currentUser,
+    openAuthModal,
   } = useBarbershop();
 
   const [scrollY, setScrollY] = useState(0);
@@ -111,7 +113,11 @@ export const FloatingNavDock: React.FC = () => {
                     <button
                       key={tab.id}
                       onClick={() => {
-                        setClientActiveTab(tab.id);
+                        if (tab.id === 'booking' && !currentUser) {
+                          openAuthModal();
+                        } else {
+                          setClientActiveTab(tab.id);
+                        }
                         setIsMenuOpen(false);
                       }}
                       className={`p-2 rounded-xl flex items-center gap-2 font-medium transition-all text-left ${

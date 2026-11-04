@@ -142,9 +142,13 @@ interface BarbershopContextType {
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
 
-  // Auth Simulation
-  loginClient: (phoneOrEmail: string, name: string) => void;
+  // Auth & Client Profile
+  loginClient: (phoneOrEmail: string, name?: string, email?: string, password?: string) => void;
   logoutClient: () => void;
+  isAuthModalOpen: boolean;
+  setAuthModalOpen: (open: boolean) => void;
+  openAuthModal: () => void;
+  closeAuthModal: () => void;
 
   // Demo Helpers & Data Reset
   resetToDefaults: () => void;
@@ -155,14 +159,14 @@ interface BarbershopContextType {
 
 const BarbershopContext = createContext<BarbershopContextType | undefined>(undefined);
 
-// Storage keys - v8 ensures original bundled assets load seamlessly without 404s
+// Storage keys - Production clean keys for delivery to owner
 const STORAGE_KEYS = {
   SERVICES: 'estudiovip_services_v8',
   SETTINGS: 'estudiovip_settings_v6',
-  APPOINTMENTS: 'estudiovip_appointments_v6',
-  ANNOUNCEMENTS: 'estudiovip_announcements_v6',
-  NOTIFICATIONS: 'estudiovip_notifications_v6',
-  USER: 'estudiovip_user_v6',
+  APPOINTMENTS: 'estudiovip_appointments_v9',
+  ANNOUNCEMENTS: 'estudiovip_announcements_v8',
+  NOTIFICATIONS: 'estudiovip_notifications_v8',
+  USER: 'estudiovip_user_v7',
   REVIEWS: 'estudiovip_reviews_v6',
 };
 
@@ -241,10 +245,12 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
 
   const [appointments, setAppointments] = useState<Appointment[]>(() => {
     try {
-      const isCleaned = localStorage.getItem('estudiovip_clean_state_active') === 'true';
       const saved = localStorage.getItem(STORAGE_KEYS.APPOINTMENTS);
-      if (saved) return JSON.parse(saved);
-      return isCleaned ? [] : initialAppointments;
+      if (saved) {
+        const parsed: Appointment[] = JSON.parse(saved);
+        return parsed.filter((a) => !a.id.startsWith('apt-20'));
+      }
+      return [];
     } catch {
       return [];
     }
@@ -253,7 +259,11 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
   const [announcements, setAnnouncements] = useState<Announcement[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
-      return saved ? JSON.parse(saved) : initialAnnouncements;
+      if (saved) {
+        const parsed: Announcement[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return initialAnnouncements;
     } catch {
       return initialAnnouncements;
     }
@@ -261,29 +271,33 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
 
   const [notifications, setNotifications] = useState<AdminNotification[]>(() => {
     try {
-      const isCleaned = localStorage.getItem('estudiovip_clean_state_active') === 'true';
       const saved = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
       if (saved) return JSON.parse(saved);
-      return isCleaned ? [] : initialNotifications;
+      return [];
     } catch {
       return [];
     }
   });
 
+  // Default: Start with NO logged in user until client decides to book or login
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.USER);
-      return saved ? JSON.parse(saved) : {
-        id: 'usr-default',
-        name: 'Rafael Oliveira',
-        phone: '(67) 99876-1122',
-        email: 'rafael.oliveira@gmail.com',
-        isLoggedIn: true
-      };
+      if (saved) {
+        const parsed: UserAccount = JSON.parse(saved);
+        if (parsed && parsed.id && parsed.id !== 'usr-default' && parsed.name !== 'Rafael Oliveira') {
+          return parsed;
+        }
+      }
+      return null;
     } catch {
       return null;
     }
   });
+
+  const [isAuthModalOpen, setAuthModalOpen] = useState(false);
+  const openAuthModal = () => setAuthModalOpen(true);
+  const closeAuthModal = () => setAuthModalOpen(false);
 
   const [activeView, setActiveView] = useState<'client' | 'admin'>('client');
   const [clientActiveTab, setClientActiveTab] = useState<'home' | 'booking' | 'services' | 'my-appointments' | 'announcements' | 'barber'>('home');
@@ -1209,22 +1223,37 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
-  // Auth Simulation
-  const loginClient = (phoneOrEmail: string, name: string) => {
+  // Auth & Client Profile
+  const loginClient = (phoneOrEmail: string, name?: string, email?: string, password?: string) => {
     const isEmail = phoneOrEmail.includes('@');
+    const cleanPhone = !isEmail ? phoneOrEmail : '(67) 99876-4321';
+    const cleanEmail = isEmail ? phoneOrEmail : (email || '');
+    const cleanName = (name && name.trim()) || 'Cliente Estúdio VIP';
+
     const newUser: UserAccount = {
       id: `usr-${Date.now()}`,
-      name: name.trim() || 'Cliente Estúdio VIP',
-      phone: !isEmail ? phoneOrEmail : '(67) 99876-4321',
-      email: isEmail ? phoneOrEmail : 'cliente@exemplo.com',
+      name: cleanName,
+      phone: cleanPhone,
+      email: cleanEmail,
       isLoggedIn: true,
+      password: password || undefined,
     };
     setCurrentUser(newUser);
-    showToast(`Bem-vindo, ${newUser.name}!`, 'success', 'Login Realizado');
+    try {
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(newUser));
+    } catch (e) {
+      console.error(e);
+    }
+    showToast(`Bem-vindo(a), ${newUser.name.split(' ')[0]}!`, 'success', 'Login Salvo no Aparelho');
   };
 
   const logoutClient = () => {
     setCurrentUser(null);
+    try {
+      localStorage.removeItem(STORAGE_KEYS.USER);
+    } catch (e) {
+      console.error(e);
+    }
     showToast('Você saiu da sua conta.', 'info');
   };
 
@@ -1427,6 +1456,10 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
         markAllNotificationsAsRead,
         loginClient,
         logoutClient,
+        isAuthModalOpen,
+        setAuthModalOpen,
+        openAuthModal,
+        closeAuthModal,
         resetToDefaults,
         resetTestData,
         isSystemCleaned,

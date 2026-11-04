@@ -9,7 +9,6 @@ import {
   ShieldCheck, 
   CalendarDays, 
   Megaphone, 
-  RotateCcw,
   PlusCircle,
   Menu,
   X,
@@ -40,7 +39,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
     currentUser,
     appointments,
     simulateIncomingBooking,
-    resetToDefaults,
     getBarberRatingStats
   } = useBarbershop();
 
@@ -190,7 +188,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
               <span>Início</span>
             </button>
             <button
-              onClick={() => setClientActiveTab('booking')}
+              onClick={() => {
+                if (!currentUser) {
+                  onOpenAuth();
+                } else {
+                  setClientActiveTab('booking');
+                }
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                 clientActiveTab === 'booking'
                   ? 'bg-amber-500 text-zinc-950 shadow'
@@ -295,6 +299,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
             <button
               onClick={onOpenAuth}
               className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-amber-500/50 text-xs text-zinc-200 transition-all hover:bg-zinc-800/80 shrink-0"
+              title={currentUser ? `Logado como ${currentUser.name}` : 'Acessar ou Criar Conta'}
             >
               <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs shrink-0">
                 {currentUser ? currentUser.name[0].toUpperCase() : <User className="w-3.5 h-3.5" />}
@@ -304,24 +309,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
                   {currentUser ? currentUser.name.split(' ')[0] : 'Entrar / Cadastro'}
                 </p>
                 <p className="text-[10px] text-zinc-400 leading-tight">
-                  {currentUser ? 'Cliente' : 'Simulação'}
+                  {currentUser ? 'Cliente' : 'Acesso Rápido'}
                 </p>
               </div>
             </button>
           )}
-
-          {/* Quick Reset Demo button */}
-          <button
-            onClick={() => {
-              if (window.confirm('Deseja restaurar todos os dados para o padrão original da barbearia?')) {
-                resetToDefaults();
-              }
-            }}
-            className="hidden sm:flex p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors shrink-0"
-            title="Restaurar dados originais do Estúdio VIP Barbearia"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
 
           {/* Mobile hamburger menu toggle */}
           <button
@@ -362,7 +354,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
               </button>
               <button
                 onClick={() => {
-                  setClientActiveTab('booking');
+                  if (!currentUser) {
+                    onOpenAuth();
+                  } else {
+                    setClientActiveTab('booking');
+                  }
                   setMobileMenuOpen(false);
                 }}
                 className={`p-2.5 rounded-lg text-xs font-medium text-left flex items-center gap-2 ${

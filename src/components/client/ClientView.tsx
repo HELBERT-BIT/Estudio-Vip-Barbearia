@@ -33,6 +33,8 @@ export const ClientView: React.FC = () => {
     setClientActiveTab, 
     isOpenNow,
     announcements,
+    currentUser,
+    openAuthModal,
     getBarberRatingStats 
   } = useBarbershop();
 
@@ -59,9 +61,13 @@ export const ClientView: React.FC = () => {
 
   const popularServices = services.filter((s) => s.active && s.popular).slice(0, 3);
 
-  const handleBookServiceDirectly = (serviceId: string) => {
+  const handleBookServiceDirectly = (serviceId?: string) => {
     setPreSelectedServiceId(serviceId);
-    setClientActiveTab('booking');
+    if (!currentUser) {
+      openAuthModal();
+    } else {
+      setClientActiveTab('booking');
+    }
   };
 
   return (
@@ -90,10 +96,7 @@ export const ClientView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => {
-            setPreSelectedServiceId(undefined);
-            setClientActiveTab('booking');
-          }}
+          onClick={() => handleBookServiceDirectly(undefined)}
           className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
             clientActiveTab === 'booking'
               ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20'
@@ -260,10 +263,7 @@ export const ClientView: React.FC = () => {
               {/* Botões de Ação Rápida - Flexíveis e acessíveis no mobile */}
               <div className="flex flex-col sm:flex-row flex-wrap gap-2.5 pt-2 w-full">
                 <button
-                  onClick={() => {
-                    setPreSelectedServiceId(undefined);
-                    setClientActiveTab('booking');
-                  }}
+                  onClick={() => handleBookServiceDirectly(undefined)}
                   className="w-full sm:w-auto py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-zinc-950 font-bold text-sm shadow-xl shadow-amber-500/25 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <CalendarDays className="w-4 h-4 text-zinc-950 shrink-0" />

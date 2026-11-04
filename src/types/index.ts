@@ -132,6 +132,7 @@ export interface UserAccount {
   phone: string;
   email: string;
   isLoggedIn: boolean;
+  password?: string;
 }
 
 export interface BarberReview {

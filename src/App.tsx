@@ -19,8 +19,7 @@ import {
 } from 'lucide-react';
 
 const BarbershopApp: React.FC = () => {
-  const { activeView, settings } = useBarbershop();
-  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const { activeView, settings, isAuthModalOpen, openAuthModal, closeAuthModal } = useBarbershop();
   const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
 
   return (
@@ -45,7 +44,7 @@ const BarbershopApp: React.FC = () => {
 
       {/* Cabeçalho de Navegação Superior (z-40) */}
       <Navbar
-        onOpenAuth={() => setAuthModalOpen(true)}
+        onOpenAuth={openAuthModal}
         onOpenNotifications={() => setNotificationsModalOpen(true)}
       />
 
@@ -145,7 +144,7 @@ const BarbershopApp: React.FC = () => {
       </footer>
 
       {/* Modais Globais & Toasts */}
-      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+      <AuthModal isOpen={isAuthModalOpen} onClose={closeAuthModal} />
       <AdminNotificationsModal isOpen={notificationsModalOpen} onClose={() => setNotificationsModalOpen(false)} />
       <FloatingNavDock />
       <ToastContainer />

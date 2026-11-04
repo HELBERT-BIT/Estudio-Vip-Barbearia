@@ -292,7 +292,7 @@ export const MyAppointments: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Actions & Simulation Bar */}
+                  {/* Actions */}
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                     {/* Cancellation button for client */}
                     <button
@@ -302,17 +302,6 @@ export const MyAppointments: React.FC = () => {
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Cancelar Agendamento</span>
-                    </button>
-
-                    {/* Interactive demonstration helper: simulate delay exceeding 10 min */}
-                    <button
-                      type="button"
-                      onClick={() => simulateDelayAndCancel(apt.id)}
-                      className="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors"
-                      title="Testa a regra de negócio #4: simula que passaram mais de 10 minutos do horário sem o cliente comparecer, acionando o cancelamento automático e liberando o horário na agenda!"
-                    >
-                      <Timer className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Simular Atraso &gt; 10 min (Testar Tolerância)</span>
                     </button>
                   </div>
                 </div>
