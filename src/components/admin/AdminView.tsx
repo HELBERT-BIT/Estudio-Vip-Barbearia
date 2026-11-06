@@ -8,6 +8,7 @@ import { AdminPayments } from './AdminPayments';
 import { AdminAnnouncements } from './AdminAnnouncements';
 import { AdminCancellationsLog } from './AdminCancellationsLog';
 import { AdminReviewsManager } from './AdminReviewsManager';
+import { AdminClients } from './AdminClients';
 import { AdminLogin } from './AdminLogin';
 import { AdminPushDispatcherModal } from './AdminPushDispatcherModal';
 import { AdminResetTestDataModal } from './AdminResetTestDataModal';
@@ -20,6 +21,7 @@ import {
   Megaphone, 
   ShieldAlert, 
   Star,
+  Users,
   LogOut,
   BellRing,
   RotateCcw,
@@ -32,25 +34,17 @@ export const AdminView: React.FC = () => {
     setAdminActiveTab, 
     appointments,
     reviews,
+    registeredClients,
     isSystemCleaned,
-    showToast
+    isAdminLoggedIn,
+    adminLogout,
   } = useBarbershop();
-
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
-    return sessionStorage.getItem('estudio_vip_admin_logged') === 'true';
-  });
 
   const [isPushModalOpen, setIsPushModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
-  const handleLogout = () => {
-    sessionStorage.removeItem('estudio_vip_admin_logged');
-    setIsAdminLoggedIn(false);
-    showToast('Sessão encerrada com sucesso.', 'info', 'Logout');
-  };
-
   if (!isAdminLoggedIn) {
-    return <AdminLogin onLoginSuccess={() => setIsAdminLoggedIn(true)} />;
+    return <AdminLogin onLoginSuccess={() => {}} />;
   }
 
   const delayedCount = appointments.filter((a) => a.status === 'cancelado_atraso').length;
@@ -71,6 +65,12 @@ export const AdminView: React.FC = () => {
       id: 'appointments',
       label: 'Agenda do Dia',
       icon: <CalendarDays className="w-4 h-4" />,
+    },
+    {
+      id: 'clients',
+      label: 'Clientes Cadastrados',
+      icon: <Users className="w-4 h-4" />,
+      badge: registeredClients.length > 0 ? registeredClients.length : undefined,
     },
     {
       id: 'services',
@@ -178,7 +178,7 @@ export const AdminView: React.FC = () => {
           {/* Sair do Painel */}
           <button
             type="button"
-            onClick={handleLogout}
+            onClick={adminLogout}
             className="px-3 py-2 rounded-xl text-xs font-bold text-zinc-400 hover:text-rose-400 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-all flex items-center gap-1.5 cursor-pointer ml-auto"
             title="Encerrar sessão de administrador"
           >
@@ -191,6 +191,7 @@ export const AdminView: React.FC = () => {
       {/* Admin Views */}
       {adminActiveTab === 'overview' && <AdminDashboard />}
       {adminActiveTab === 'appointments' && <AdminSchedule />}
+      {adminActiveTab === 'clients' && <AdminClients />}
       {adminActiveTab === 'services' && <AdminServices />}
       {adminActiveTab === 'schedule' && <AdminHoursConfig />}
       {adminActiveTab === 'payments' && <AdminPayments />}

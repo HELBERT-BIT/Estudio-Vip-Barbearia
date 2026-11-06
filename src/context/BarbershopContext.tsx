@@ -10,7 +10,8 @@ import {
   PaymentStatus, 
   AppointmentStatus,
   WorkingDayConfig,
-  BarberReview
+  BarberReview,
+  RegisteredClient
 } from '../types';
 import { 
   initialServices, 
@@ -21,6 +22,11 @@ import {
   initialReviews,
   getTodayString 
 } from '../data/initialData';
+import { 
+  sendPushNotificationToClients, 
+  PushNotificationPayload, 
+  playNotificationChime 
+} from '../services/pushNotificationService';
 
 export interface ToastMessage {
   id: string;
@@ -51,15 +57,25 @@ interface BarbershopContextType {
   notifications: AdminNotification[];
   reviews: BarberReview[];
   currentUser: UserAccount | null;
+  registeredClients: RegisteredClient[];
+  isAdminLoggedIn: boolean;
   activeView: 'client' | 'admin';
   clientActiveTab: 'home' | 'booking' | 'services' | 'my-appointments' | 'announcements' | 'barber';
-  adminActiveTab: 'overview' | 'appointments' | 'services' | 'schedule' | 'payments' | 'announcements' | 'cancellations' | 'reviews';
+  adminActiveTab: 'overview' | 'appointments' | 'services' | 'schedule' | 'payments' | 'announcements' | 'cancellations' | 'reviews' | 'clients';
   toasts: ToastMessage[];
+
+  // Admin Auth
+  adminLogin: (user: string, pass: string) => boolean;
+  adminLogout: () => void;
+
+  // Registered Clients
+  deleteRegisteredClient: (id: string) => void;
+  addOrUpdateRegisteredClient: (client: Partial<RegisteredClient> & { name: string; phone: string }) => RegisteredClient;
 
   // Navigation & View Mode
   setActiveView: (view: 'client' | 'admin') => void;
   setClientActiveTab: (tab: 'home' | 'booking' | 'services' | 'my-appointments' | 'announcements' | 'barber') => void;
-  setAdminActiveTab: (tab: 'overview' | 'appointments' | 'services' | 'schedule' | 'payments' | 'announcements' | 'cancellations' | 'reviews') => void;
+  setAdminActiveTab: (tab: 'overview' | 'appointments' | 'services' | 'schedule' | 'payments' | 'announcements' | 'cancellations' | 'reviews' | 'clients') => void;
   
   // Toasts
   showToast: (message: string, type?: ToastMessage['type'], title?: string) => void;
@@ -168,7 +184,41 @@ const STORAGE_KEYS = {
   NOTIFICATIONS: 'estudiovip_notifications_v8',
   USER: 'estudiovip_user_v7',
   REVIEWS: 'estudiovip_reviews_v6',
+  CLIENTS: 'estudiovip_registered_clients_v2',
 };
+
+const defaultClients: RegisteredClient[] = [
+  {
+    id: 'cli-1',
+    name: 'Rafael Oliveira',
+    phone: '(67) 99944-0532',
+    email: 'rafael@email.com',
+    createdAt: '2026-10-15T10:00:00.000Z',
+    lastBookingDate: '2026-11-04',
+    totalBookings: 3,
+    totalSpent: 135,
+  },
+  {
+    id: 'cli-2',
+    name: 'Carlos Eduardo',
+    phone: '(67) 99876-1234',
+    email: 'carlos.eduardo@email.com',
+    createdAt: '2026-10-20T14:30:00.000Z',
+    lastBookingDate: '2026-11-02',
+    totalBookings: 2,
+    totalSpent: 75,
+  },
+  {
+    id: 'cli-3',
+    name: 'Homega Silva',
+    phone: '(67) 99876-4321',
+    email: 'homegasilva34@gmail.com',
+    createdAt: '2026-11-01T09:15:00.000Z',
+    lastBookingDate: '2026-11-05',
+    totalBookings: 1,
+    totalSpent: 45,
+  },
+];
 
 export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Load state from localStorage or fallback to defaults
@@ -279,6 +329,29 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   });
 
+  // Base de Clientes Cadastrados
+  const [registeredClients, setRegisteredClients] = useState<RegisteredClient[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.CLIENTS);
+      if (saved) {
+        const parsed: RegisteredClient[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return defaultClients;
+    } catch {
+      return defaultClients;
+    }
+  });
+
+  // Estado de Autenticação Global do Administrador (Protege contra vazamento de botões/portas/alertas antes do login)
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('estudio_vip_admin_logged') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
   // Default: Start with NO logged in user until client decides to book or login
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     try {
@@ -301,7 +374,7 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
 
   const [activeView, setActiveView] = useState<'client' | 'admin'>('client');
   const [clientActiveTab, setClientActiveTab] = useState<'home' | 'booking' | 'services' | 'my-appointments' | 'announcements' | 'barber'>('home');
-  const [adminActiveTab, setAdminActiveTab] = useState<'overview' | 'appointments' | 'services' | 'schedule' | 'payments' | 'announcements' | 'cancellations' | 'reviews'>('overview');
+  const [adminActiveTab, setAdminActiveTab] = useState<'overview' | 'appointments' | 'services' | 'schedule' | 'payments' | 'announcements' | 'cancellations' | 'reviews' | 'clients'>('overview');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   // Sync to localStorage
@@ -364,6 +437,98 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
       console.error(e);
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(registeredClients));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [registeredClients]);
+
+  // Listener para eventos de Push entre abas e dispositivos (comunicação cliente <-> barbeiro)
+  useEffect(() => {
+    const handlePushBroadcast = (e: Event) => {
+      const customEvt = e as CustomEvent<PushNotificationPayload>;
+      if (customEvt.detail) {
+        const payload = customEvt.detail;
+        // Reproduz toque luxuoso de sino de barbearia
+        playNotificationChime();
+        // Feedback visual
+        if (payload.type === 'novo_agendamento') {
+          showToast(`Novo agendamento recebido: ${payload.body}`, 'info', 'Agendamento em Tempo Real');
+        } else if (payload.type === 'aviso_geral') {
+          showToast(payload.body, 'info', payload.title);
+        }
+      }
+    };
+    window.addEventListener('estudiovip-push-received', handlePushBroadcast);
+    return () => window.removeEventListener('estudiovip-push-received', handlePushBroadcast);
+  }, []);
+
+  // Admin Auth Helpers
+  const adminLogin = (user: string, pass: string): boolean => {
+    const validUser = (import.meta.env.VITE_ADMIN_USER || 'estudiomariamiguel123').trim();
+    const validPass = (import.meta.env.VITE_ADMIN_PASS || 'barbeirotop1590').trim();
+
+    if (user.trim() === validUser && pass.trim() === validPass) {
+      sessionStorage.setItem('estudio_vip_admin_logged', 'true');
+      setIsAdminLoggedIn(true);
+      showToast('Bem-vindo ao Painel Administrativo, Mariano!', 'success', 'Acesso Autorizado');
+      return true;
+    }
+    return false;
+  };
+
+  const adminLogout = () => {
+    sessionStorage.removeItem('estudio_vip_admin_logged');
+    setIsAdminLoggedIn(false);
+    showToast('Sessão encerrada com sucesso.', 'info', 'Logout');
+  };
+
+  // Registered Clients Management
+  const deleteRegisteredClient = (id: string) => {
+    setRegisteredClients((prev) => prev.filter((c) => c.id !== id));
+    showToast('Cliente removido da base cadastral.', 'info', 'Cadastro Atualizado');
+  };
+
+  const addOrUpdateRegisteredClient = (data: Partial<RegisteredClient> & { name: string; phone: string }): RegisteredClient => {
+    let result: RegisteredClient;
+    setRegisteredClients((prev) => {
+      const cleanPhone = data.phone.trim();
+      const existingIndex = prev.findIndex(
+        (c) =>
+          c.id === data.id ||
+          (cleanPhone && c.phone.replace(/\D/g, '') === cleanPhone.replace(/\D/g, '')) ||
+          (data.email && c.email?.toLowerCase() === data.email.toLowerCase())
+      );
+
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        result = {
+          ...updated[existingIndex],
+          ...data,
+          name: data.name.trim() || updated[existingIndex].name,
+          phone: cleanPhone || updated[existingIndex].phone,
+        };
+        updated[existingIndex] = result;
+        return updated;
+      } else {
+        result = {
+          id: data.id || `cli-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          name: data.name.trim(),
+          phone: cleanPhone,
+          email: data.email?.trim() || undefined,
+          createdAt: new Date().toISOString(),
+          totalBookings: data.totalBookings || 0,
+          totalSpent: data.totalSpent || 0,
+          lastBookingDate: data.lastBookingDate,
+        };
+        return [result, ...prev];
+      }
+    });
+    return result!;
+  };
 
   // Toast helper
   const showToast = (message: string, type: ToastMessage['type'] = 'info', title?: string) => {
@@ -1002,6 +1167,58 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
 
     setAppointments((prev) => [newAppointment, ...prev]);
 
+    // Atualiza ou insere cliente na base de clientes cadastrados
+    setRegisteredClients((prev) => {
+      const cleanPhone = clientPhone.trim();
+      const existingIdx = prev.findIndex(
+        (c) =>
+          (cleanPhone && c.phone.replace(/\D/g, '') === cleanPhone.replace(/\D/g, '')) ||
+          (clientEmail && c.email?.toLowerCase() === clientEmail.toLowerCase())
+      );
+      if (existingIdx >= 0) {
+        const copy = [...prev];
+        copy[existingIdx] = {
+          ...copy[existingIdx],
+          name: clientName || copy[existingIdx].name,
+          phone: cleanPhone || copy[existingIdx].phone,
+          email: clientEmail || copy[existingIdx].email,
+          lastBookingDate: date,
+          totalBookings: (copy[existingIdx].totalBookings || 0) + 1,
+          totalSpent: (copy[existingIdx].totalSpent || 0) + totalPrice,
+        };
+        return copy;
+      } else {
+        const newRegClient: RegisteredClient = {
+          id: `cli-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          name: clientName,
+          phone: cleanPhone,
+          email: clientEmail || undefined,
+          createdAt: new Date().toISOString(),
+          lastBookingDate: date,
+          totalBookings: 1,
+          totalSpent: totalPrice,
+        };
+        return [newRegClient, ...prev];
+      }
+    });
+
+    // Mantém o usuário ativo salvo no aparelho do cliente
+    if (!currentUser || currentUser.name !== clientName) {
+      const userObj: UserAccount = {
+        id: currentUser?.id || `usr-${Date.now()}`,
+        name: clientName,
+        phone: clientPhone,
+        email: clientEmail || '',
+        isLoggedIn: true,
+      };
+      setCurrentUser(userObj);
+      try {
+        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(userObj));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
     // Push simulated notification to owner
     const paymentLabel = paymentType === 'sinal_50'
       ? `Sinal Pix de Garantia 50% (R$ ${calcDeposit.toFixed(2).replace('.', ',')}) + R$ ${calcRemaining.toFixed(2).replace('.', ',')} presencial`
@@ -1019,6 +1236,15 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
       appointmentId: newAppointment.id,
     };
     setNotifications((prev) => [newNotif, ...prev]);
+
+    // Dispara notificação push e aviso sonoro para os aparelhos conectados (conecta cliente <-> barbeiro)
+    sendPushNotificationToClients({
+      title: '💈 Novo Agendamento - Estúdio VIP',
+      body: `${clientName} agendou ${combinedName} para ${date} às ${time}.`,
+      type: 'novo_agendamento',
+      clientName,
+      appointmentId: newAppointment.id,
+    });
 
     showToast(
       `Agendamento para ${time} confirmado! Lembre-se: tolerância de 10 minutos.`,
@@ -1058,6 +1284,17 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
         appointmentId: id,
       };
       setNotifications((prev) => [newNotif, ...prev]);
+
+      // Dispara push notification para manter cliente e barbeiro alinhados
+      sendPushNotificationToClients({
+        title: isFromAdmin ? '✂️ Aviso da Barbearia Estúdio VIP' : '✂️ Horário Desmarcado',
+        body: isFromAdmin
+          ? `Seu agendamento das ${cancelledApt.time} foi alterado/cancelado pelo barbeiro: ${reason}`
+          : `O horário das ${cancelledApt.time} de ${cancelledApt.clientName} foi desmarcado e está liberado.`,
+        type: 'cancelamento',
+        clientName: cancelledApt.clientName,
+        appointmentId: id,
+      });
     }
 
     showToast('Agendamento cancelado com sucesso. O horário foi liberado na agenda.', 'info', 'Cancelamento Efetuado');
@@ -1198,6 +1435,14 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
       id: `anc-${Date.now()}`,
     };
     setAnnouncements((prev) => [ann, ...prev]);
+
+    // Dispara push notification para todos os clientes cadastrados
+    sendPushNotificationToClients({
+      title: `📢 Comunicado da Barbearia: ${ann.title}`,
+      body: ann.content,
+      type: 'aviso_geral',
+    });
+
     showToast('Novo comunicado publicado no Mural de Avisos!', 'success');
   };
 
@@ -1226,25 +1471,91 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
   // Auth & Client Profile
   const loginClient = (phoneOrEmail: string, name?: string, email?: string, password?: string) => {
     const isEmail = phoneOrEmail.includes('@');
-    const cleanPhone = !isEmail ? phoneOrEmail : '(67) 99876-4321';
-    const cleanEmail = isEmail ? phoneOrEmail : (email || '');
-    const cleanName = (name && name.trim()) || 'Cliente Estúdio VIP';
+    const inputClean = phoneOrEmail.trim();
+
+    // Look up existing in registeredClients
+    const cleanDigits = inputClean.replace(/\D/g, '');
+    const existing = registeredClients.find((c) => {
+      const matchEmail = (isEmail && c.email?.toLowerCase() === inputClean.toLowerCase()) || 
+                          (email && c.email?.toLowerCase() === email.toLowerCase());
+      const matchPhone = !isEmail && cleanDigits.length >= 8 && c.phone.replace(/\D/g, '').includes(cleanDigits);
+      return matchEmail || matchPhone;
+    });
+
+    let cleanName = '';
+    if (name && name.trim() && name.trim() !== 'Cliente Cadastrado' && name.trim() !== 'Cliente Estúdio VIP') {
+      cleanName = name.trim();
+    } else if (existing && existing.name && existing.name !== 'Cliente Cadastrado') {
+      cleanName = existing.name;
+    } else if (isEmail) {
+      const userPart = inputClean.split('@')[0].replace(/[0-9_.-]/g, ' ').trim();
+      cleanName = userPart
+        ? userPart.split(' ').filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        : 'Cliente VIP';
+    } else {
+      cleanName = 'Cliente VIP';
+    }
+
+    let cleanPhone = '';
+    if (!isEmail) {
+      cleanPhone = inputClean;
+    } else if (existing?.phone) {
+      cleanPhone = existing.phone;
+    } else {
+      cleanPhone = '(67) 99944-0532';
+    }
+
+    const cleanEmail = isEmail ? inputClean : (email?.trim() || existing?.email || '');
 
     const newUser: UserAccount = {
-      id: `usr-${Date.now()}`,
+      id: existing?.id || `usr-${Date.now()}`,
       name: cleanName,
       phone: cleanPhone,
       email: cleanEmail,
       isLoggedIn: true,
       password: password || undefined,
     };
+
     setCurrentUser(newUser);
+
+    // Save/update in registeredClients
+    setRegisteredClients((prev) => {
+      const idx = prev.findIndex(
+        (c) =>
+          c.id === newUser.id ||
+          (cleanPhone && c.phone.replace(/\D/g, '') === cleanPhone.replace(/\D/g, '')) ||
+          (cleanEmail && c.email?.toLowerCase() === cleanEmail.toLowerCase())
+      );
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = {
+          ...copy[idx],
+          name: cleanName,
+          phone: cleanPhone,
+          email: cleanEmail || copy[idx].email,
+        };
+        return copy;
+      } else {
+        const newClient: RegisteredClient = {
+          id: newUser.id,
+          name: cleanName,
+          phone: cleanPhone,
+          email: cleanEmail || undefined,
+          createdAt: new Date().toISOString(),
+          totalBookings: 0,
+          totalSpent: 0,
+        };
+        return [newClient, ...prev];
+      }
+    });
+
     try {
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(newUser));
     } catch (e) {
       console.error(e);
     }
-    showToast(`Bem-vindo(a), ${newUser.name.split(' ')[0]}!`, 'success', 'Login Salvo no Aparelho');
+
+    showToast(`Bem-vindo(a), ${cleanName}!`, 'success', 'Login Salvo no Aparelho');
   };
 
   const logoutClient = () => {
@@ -1352,6 +1663,7 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     setAnnouncements(initialAnnouncements);
     setNotifications(initialNotifications);
     setReviews(initialReviews);
+    setRegisteredClients(defaultClients);
     setIsSystemCleaned(false);
     localStorage.removeItem('estudiovip_clean_state_active');
     localStorage.clear();
@@ -1414,10 +1726,16 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
         notifications,
         reviews,
         currentUser,
+        registeredClients,
+        isAdminLoggedIn,
         activeView,
         clientActiveTab,
         adminActiveTab,
         toasts,
+        adminLogin,
+        adminLogout,
+        deleteRegisteredClient,
+        addOrUpdateRegisteredClient,
         setActiveView,
         setClientActiveTab,
         setAdminActiveTab,

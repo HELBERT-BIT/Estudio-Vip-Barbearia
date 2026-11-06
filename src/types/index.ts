@@ -135,6 +135,18 @@ export interface UserAccount {
   password?: string;
 }
 
+export interface RegisteredClient {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  password?: string;
+  createdAt: string;
+  lastBookingDate?: string;
+  totalBookings: number;
+  totalSpent: number;
+}
+
 export interface BarberReview {
   id: string;
   appointmentId?: string;

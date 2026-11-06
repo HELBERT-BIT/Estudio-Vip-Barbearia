@@ -10,6 +10,7 @@ import {
   Clock,
   Megaphone,
   Star,
+  Users,
   LayoutDashboard,
   ShieldAlert,
   DollarSign,
@@ -25,6 +26,7 @@ export const FloatingNavDock: React.FC = () => {
     setAdminActiveTab,
     currentUser,
     openAuthModal,
+    isAdminLoggedIn,
   } = useBarbershop();
 
   const [scrollY, setScrollY] = useState(0);
@@ -79,6 +81,7 @@ export const FloatingNavDock: React.FC = () => {
   }[] = [
     { id: 'overview', label: 'Visão Geral', icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'appointments', label: 'Agenda', icon: <CalendarDays className="w-4 h-4" /> },
+    { id: 'clients', label: 'Clientes', icon: <Users className="w-4 h-4" /> },
     { id: 'services', label: 'Serviços', icon: <Scissors className="w-4 h-4" /> },
     { id: 'schedule', label: 'Horários', icon: <Clock className="w-4 h-4" /> },
     { id: 'payments', label: 'Caixa', icon: <DollarSign className="w-4 h-4" /> },
@@ -106,18 +109,14 @@ export const FloatingNavDock: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-1.5 text-xs">
-            {activeView === 'client'
-              ? clientTabs.map((tab) => {
-                  const isActive = clientActiveTab === tab.id;
+            {activeView === 'admin' && isAdminLoggedIn
+              ? adminTabs.map((tab) => {
+                  const isActive = adminActiveTab === tab.id;
                   return (
                     <button
                       key={tab.id}
                       onClick={() => {
-                        if (tab.id === 'booking' && !currentUser) {
-                          openAuthModal();
-                        } else {
-                          setClientActiveTab(tab.id);
-                        }
+                        setAdminActiveTab(tab.id);
                         setIsMenuOpen(false);
                       }}
                       className={`p-2 rounded-xl flex items-center gap-2 font-medium transition-all text-left ${
@@ -131,13 +130,17 @@ export const FloatingNavDock: React.FC = () => {
                     </button>
                   );
                 })
-              : adminTabs.map((tab) => {
-                  const isActive = adminActiveTab === tab.id;
+              : clientTabs.map((tab) => {
+                  const isActive = clientActiveTab === tab.id;
                   return (
                     <button
                       key={tab.id}
                       onClick={() => {
-                        setAdminActiveTab(tab.id);
+                        if (tab.id === 'booking' && !currentUser) {
+                          openAuthModal();
+                        } else {
+                          setClientActiveTab(tab.id);
+                        }
                         setIsMenuOpen(false);
                       }}
                       className={`p-2 rounded-xl flex items-center gap-2 font-medium transition-all text-left ${

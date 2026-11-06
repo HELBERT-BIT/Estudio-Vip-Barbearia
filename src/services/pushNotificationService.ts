@@ -9,7 +9,7 @@ export interface PushNotificationPayload {
   title: string;
   body: string;
   timestamp: string;
-  type: 'alteracao_horario' | 'lembrete' | 'vaga_liberada' | 'aviso_geral' | 'personalizado';
+  type: 'alteracao_horario' | 'lembrete' | 'vaga_liberada' | 'aviso_geral' | 'personalizado' | 'novo_agendamento' | 'cancelamento';
   clientName?: string;
   appointmentId?: string;
   url?: string;

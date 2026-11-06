@@ -15,7 +15,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   initialMode = 'register',
   onSuccess 
 }) => {
-  const { currentUser, loginClient, logoutClient, setClientActiveTab } = useBarbershop();
+  const { currentUser, registeredClients, loginClient, logoutClient, setClientActiveTab } = useBarbershop();
   const [isRegister, setIsRegister] = useState(initialMode === 'register');
   const [name, setName] = useState('');
   const [phoneOrEmail, setPhoneOrEmail] = useState('');
@@ -27,7 +27,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!phoneOrEmail) return;
-    loginClient(phoneOrEmail, name || 'Cliente Cadastrado', email, password);
+
+    // Procura na base de clientes cadastrados
+    const inputClean = phoneOrEmail.trim();
+    const isEmail = inputClean.includes('@');
+    const cleanDigits = inputClean.replace(/\D/g, '');
+    const existing = registeredClients.find((c) => {
+      const matchEmail = isEmail && c.email?.toLowerCase() === inputClean.toLowerCase();
+      const matchPhone = !isEmail && cleanDigits.length >= 8 && c.phone.replace(/\D/g, '').includes(cleanDigits);
+      return matchEmail || matchPhone;
+    });
+
+    let resolvedName = name.trim();
+    if (!resolvedName && existing && existing.name && existing.name !== 'Cliente Cadastrado') {
+      resolvedName = existing.name;
+    } else if (!resolvedName && isEmail) {
+      // Gera nome real formatado a partir do prefixo do email (ex: homegasilva34 -> Homega Silva)
+      const userPart = inputClean.split('@')[0].replace(/[0-9_.-]/g, ' ').trim();
+      resolvedName = userPart
+        ? userPart.split(' ').filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        : 'Cliente';
+    }
+
+    loginClient(phoneOrEmail, resolvedName, email || existing?.email, password);
     setClientActiveTab('booking');
     if (onSuccess) onSuccess();
     onClose();

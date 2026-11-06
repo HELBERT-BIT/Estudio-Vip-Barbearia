@@ -7,7 +7,7 @@ interface AdminLoginProps {
 }
 
 export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
-  const { setActiveView } = useBarbershop();
+  const { setActiveView, adminLogin } = useBarbershop();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -16,13 +16,8 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Puxa as credenciais de forma segura do ambiente (.env / import.meta.env)
-    const validUser = (import.meta.env.VITE_ADMIN_USER || 'estudiomariamiguel123').trim();
-    const validPass = (import.meta.env.VITE_ADMIN_PASS || 'barbeirotop1590').trim();
-
-    if (username.trim() === validUser && password.trim() === validPass) {
-      // Salva na sessão do navegador (protege a aba aberta)
-      sessionStorage.setItem('estudio_vip_admin_logged', 'true');
+    const success = adminLogin(username, password);
+    if (success) {
       onLoginSuccess();
     } else {
       setError(true);
