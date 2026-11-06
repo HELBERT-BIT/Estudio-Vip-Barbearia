@@ -31,6 +31,7 @@ import {
 import { AdminAnalyticsCharts } from './AdminAnalyticsCharts';
 import { AdminPushDispatcherModal } from './AdminPushDispatcherModal';
 import { AdminResetTestDataModal } from './AdminResetTestDataModal';
+import { SupabaseStatusBadge } from './SupabaseStatusBadge';
 
 export const AdminDashboard: React.FC = () => {
   const { 
@@ -257,6 +258,9 @@ export const AdminDashboard: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Supabase Cloud & Realtime Connection Status */}
+      <SupabaseStatusBadge />
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

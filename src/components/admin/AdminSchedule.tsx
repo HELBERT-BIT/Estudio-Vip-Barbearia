@@ -20,6 +20,7 @@ import {
   BellRing
 } from 'lucide-react';
 import { AdminPushDispatcherModal } from './AdminPushDispatcherModal';
+import { SupabaseStatusBadge } from './SupabaseStatusBadge';
 
 export const AdminSchedule: React.FC = () => {
   const { 
@@ -107,6 +108,7 @@ export const AdminSchedule: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <SupabaseStatusBadge compact />
             <button
               type="button"
               onClick={() => setAdminActiveTab('schedule')}

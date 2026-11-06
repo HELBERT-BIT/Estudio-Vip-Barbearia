@@ -27,6 +27,13 @@ import {
   PushNotificationPayload, 
   playNotificationChime 
 } from '../services/pushNotificationService';
+import {
+  fetchAppointmentsFromSupabase,
+  insertAppointmentToSupabase,
+  updateAppointmentInSupabase,
+  deleteAppointmentFromSupabase,
+  subscribeToAppointmentsRealtime,
+} from '../lib/supabase';
 
 export interface ToastMessage {
   id: string;
@@ -59,10 +66,14 @@ interface BarbershopContextType {
   currentUser: UserAccount | null;
   registeredClients: RegisteredClient[];
   isAdminLoggedIn: boolean;
+  isSupabaseConnected: boolean;
   activeView: 'client' | 'admin';
   clientActiveTab: 'home' | 'booking' | 'services' | 'my-appointments' | 'announcements' | 'barber';
   adminActiveTab: 'overview' | 'appointments' | 'services' | 'schedule' | 'payments' | 'announcements' | 'cancellations' | 'reviews' | 'clients';
   toasts: ToastMessage[];
+
+  // Supabase Realtime
+  refreshSupabaseAppointments: () => Promise<void>;
 
   // Admin Auth
   adminLogin: (user: string, pass: string) => boolean;
@@ -446,24 +457,67 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   }, [registeredClients]);
 
-  // Listener para eventos de Push entre abas e dispositivos (comunicação cliente <-> barbeiro)
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(false);
+
+  // Função para recarregar agendamentos do Supabase sob demanda
+  const refreshSupabaseAppointments = async () => {
+    try {
+      const remoteApts = await fetchAppointmentsFromSupabase();
+      if (remoteApts) {
+        setAppointments(remoteApts);
+        setIsSupabaseConnected(true);
+      }
+    } catch (err) {
+      console.warn('Erro ao atualizar agendamentos do Supabase:', err);
+    }
+  };
+
+  // Integração com Supabase: Carregamento inicial e Realtime Channel para sincronizar celular e PC instantaneamente
   useEffect(() => {
-    const handlePushBroadcast = (e: Event) => {
-      const customEvt = e as CustomEvent<PushNotificationPayload>;
-      if (customEvt.detail) {
-        const payload = customEvt.detail;
-        // Reproduz toque luxuoso de sino de barbearia
-        playNotificationChime();
-        // Feedback visual
-        if (payload.type === 'novo_agendamento') {
-          showToast(`Novo agendamento recebido: ${payload.body}`, 'info', 'Agendamento em Tempo Real');
-        } else if (payload.type === 'aviso_geral') {
-          showToast(payload.body, 'info', payload.title);
+    let isMounted = true;
+
+    const loadInitialAppointments = async () => {
+      try {
+        const remoteApts = await fetchAppointmentsFromSupabase();
+        if (remoteApts && isMounted) {
+          setAppointments(remoteApts);
+          setIsSupabaseConnected(true);
         }
+      } catch (e) {
+        console.warn('Carregamento inicial do Supabase usou fallback de cache local:', e);
       }
     };
-    window.addEventListener('estudiovip-push-received', handlePushBroadcast);
-    return () => window.removeEventListener('estudiovip-push-received', handlePushBroadcast);
+
+    loadInitialAppointments();
+
+    // Inscrição no canal Realtime do Supabase (eventos INSERT, UPDATE, DELETE em tempo real)
+    const unsubscribe = subscribeToAppointmentsRealtime(
+      (newApt) => {
+        setAppointments((prev) => {
+          if (prev.some((a) => a.id === newApt.id)) return prev;
+          return [newApt, ...prev];
+        });
+        playNotificationChime();
+        showToast(
+          `Novo agendamento sincronizado: ${newApt.clientName} (${newApt.time})`,
+          'info',
+          '⚡ Supabase Realtime'
+        );
+      },
+      (updatedApt) => {
+        setAppointments((prev) =>
+          prev.map((a) => (a.id === updatedApt.id ? updatedApt : a))
+        );
+      },
+      (deletedId) => {
+        setAppointments((prev) => prev.filter((a) => a.id !== deletedId));
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   // Admin Auth Helpers
@@ -1167,6 +1221,13 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
 
     setAppointments((prev) => [newAppointment, ...prev]);
 
+    // Persiste no Supabase em tempo real (aparece instantaneamente no celular e no PC admin)
+    insertAppointmentToSupabase(newAppointment).then((success) => {
+      if (success) {
+        setIsSupabaseConnected(true);
+      }
+    });
+
     // Atualiza ou insere cliente na base de clientes cadastrados
     setRegisteredClients((prev) => {
       const cleanPhone = clientPhone.trim();
@@ -1257,20 +1318,29 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
 
   // Cancel Appointment
   const cancelAppointment = (id: string, reason: string, isFromAdmin = false) => {
+    const status: AppointmentStatus = isFromAdmin ? 'cancelado_barbearia' : 'cancelado_cliente';
+    const cancelledAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
     setAppointments((prev) =>
       prev.map((apt) => {
         if (apt.id === id) {
-          const status: AppointmentStatus = isFromAdmin ? 'cancelado_barbearia' : 'cancelado_cliente';
           return {
             ...apt,
             status,
             cancellationReason: reason,
-            cancelledAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            cancelledAt,
           };
         }
         return apt;
       })
     );
+
+    // Sincroniza cancelamento no Supabase
+    updateAppointmentInSupabase(id, {
+      status,
+      cancellationReason: reason,
+      cancelledAt,
+    });
 
     const cancelledApt = appointments.find((a) => a.id === id);
     if (cancelledApt) {
@@ -1303,6 +1373,8 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
   // Simulate Delay Exceeded and Auto-Cancel
   const simulateDelayAndCancel = (id: string) => {
     let affectedApt: Appointment | undefined;
+    const cancelledAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const reason = `Cancelamento automático: tolerância de ${settings.toleranceMinutes} minutos ultrapassada sem comparecimento do cliente.`;
 
     setAppointments((prev) =>
       prev.map((apt) => {
@@ -1311,13 +1383,20 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
           return {
             ...apt,
             status: 'cancelado_atraso',
-            cancellationReason: `Cancelamento automático: tolerância de ${settings.toleranceMinutes} minutos ultrapassada sem comparecimento do cliente.`,
-            cancelledAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            cancellationReason: reason,
+            cancelledAt,
           };
         }
         return apt;
       })
     );
+
+    // Sincroniza cancelamento por atraso no Supabase
+    updateAppointmentInSupabase(id, {
+      status: 'cancelado_atraso',
+      cancellationReason: reason,
+      cancelledAt,
+    });
 
     if (affectedApt) {
       const newNotif: AdminNotification = {
@@ -1353,6 +1432,13 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
           : apt
       )
     );
+
+    // Sincroniza check-in no Supabase
+    updateAppointmentInSupabase(id, {
+      status: 'confirmado_presenca',
+      checkedInAt: timeNow,
+    });
+
     showToast('Presença do cliente confirmada no balcão!', 'success', 'Check-in Realizado');
   };
 
@@ -1371,6 +1457,14 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
           : apt
       )
     );
+
+    // Sincroniza conclusão no Supabase
+    updateAppointmentInSupabase(id, {
+      status: 'concluido',
+      paymentStatus: 'pago',
+      completedAt: timeNow,
+    });
+
     showToast('Atendimento finalizado com sucesso!', 'success', 'Concluído');
   };
 
@@ -1387,6 +1481,13 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
           : apt
       )
     );
+
+    // Sincroniza pagamento no Supabase
+    updateAppointmentInSupabase(id, {
+      paymentMethod: method,
+      paymentStatus: status,
+    });
+
     showToast('Pagamento registrado com sucesso!', 'success', 'Financeiro Atualizado');
   };
 
@@ -1676,6 +1777,11 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
    * PIX settings, and admin panel authentication!
    */
   const resetTestData = () => {
+    // Apaga os agendamentos existentes no Supabase para zerar a nuvem também
+    appointments.forEach((apt) => {
+      deleteAppointmentFromSupabase(apt.id);
+    });
+
     setAppointments([]);
     setReviews([]);
     setNotifications([]);
@@ -1728,6 +1834,8 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
         currentUser,
         registeredClients,
         isAdminLoggedIn,
+        isSupabaseConnected,
+        refreshSupabaseAppointments,
         activeView,
         clientActiveTab,
         adminActiveTab,
