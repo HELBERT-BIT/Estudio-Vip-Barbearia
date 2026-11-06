@@ -32,6 +32,7 @@ import {
   insertAppointmentToSupabase,
   updateAppointmentInSupabase,
   deleteAppointmentFromSupabase,
+  deleteAllAppointmentsFromSupabase,
   subscribeToAppointmentsRealtime,
 } from '../lib/supabase';
 
@@ -190,7 +191,6 @@ const BarbershopContext = createContext<BarbershopContextType | undefined>(undef
 const STORAGE_KEYS = {
   SERVICES: 'estudiovip_services_v8',
   SETTINGS: 'estudiovip_settings_v6',
-  APPOINTMENTS: 'estudiovip_appointments_v9',
   ANNOUNCEMENTS: 'estudiovip_announcements_v8',
   NOTIFICATIONS: 'estudiovip_notifications_v8',
   USER: 'estudiovip_user_v7',
@@ -304,18 +304,8 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   });
 
-  const [appointments, setAppointments] = useState<Appointment[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.APPOINTMENTS);
-      if (saved) {
-        const parsed: Appointment[] = JSON.parse(saved);
-        return parsed.filter((a) => !a.id.startsWith('apt-20'));
-      }
-      return [];
-    } catch {
-      return [];
-    }
-  });
+  // Agendamentos em Tempo Real: gerenciados e lidos exclusivamente da tabela 'appointments' do Supabase
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
 
   const [announcements, setAnnouncements] = useState<Announcement[]>(() => {
     try {
@@ -405,13 +395,22 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   }, [settings]);
 
+  // Limpeza de cache legado de agendamentos no localStorage para usar estritamente o Supabase
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(appointments));
+      const legacyAppointmentKeys = [
+        'estudiovip_appointments_v9',
+        'estudiovip_appointments_v8',
+        'estudiovip_appointments_v7',
+        'estudiovip_appointments_v6',
+        'estudiovip_appointments',
+        'estudio_vip_appointments',
+      ];
+      legacyAppointmentKeys.forEach((key) => localStorage.removeItem(key));
     } catch (e) {
       console.error(e);
     }
-  }, [appointments]);
+  }, []);
 
   useEffect(() => {
     try {
@@ -484,7 +483,7 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
           setIsSupabaseConnected(true);
         }
       } catch (e) {
-        console.warn('Carregamento inicial do Supabase usou fallback de cache local:', e);
+        console.warn('Carregamento inicial do Supabase:', e);
       }
     };
 
@@ -494,12 +493,30 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     const unsubscribe = subscribeToAppointmentsRealtime(
       (newApt) => {
         setAppointments((prev) => {
-          if (prev.some((a) => a.id === newApt.id)) return prev;
+          if (prev.some((a) => a.id === newApt.id)) {
+            return prev.map((a) => (a.id === newApt.id ? newApt : a));
+          }
           return [newApt, ...prev];
         });
+
+        // Alimenta instantaneamente as notificações do painel do proprietário
+        setNotifications((prev) => {
+          if (prev.some((n) => n.appointmentId === newApt.id)) return prev;
+          const newNotif: AdminNotification = {
+            id: `notif-${Date.now()}`,
+            title: '💈 Novo Agendamento Confirmado!',
+            message: `${newApt.clientName} agendou ${newApt.serviceName} para ${newApt.date} às ${newApt.time}.`,
+            timestamp: 'Agora mesmo',
+            read: false,
+            type: 'novo_agendamento',
+            appointmentId: newApt.id,
+          };
+          return [newNotif, ...prev];
+        });
+
         playNotificationChime();
         showToast(
-          `Novo agendamento sincronizado: ${newApt.clientName} (${newApt.time})`,
+          `Novo agendamento recebido: ${newApt.clientName} (${newApt.time})`,
           'info',
           '⚡ Supabase Realtime'
         );
@@ -511,6 +528,11 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
       },
       (deletedId) => {
         setAppointments((prev) => prev.filter((a) => a.id !== deletedId));
+      },
+      (status) => {
+        if (status === 'SUBSCRIBED') {
+          setIsSupabaseConnected(true);
+        }
       }
     );
 
@@ -1777,21 +1799,27 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
    * PIX settings, and admin panel authentication!
    */
   const resetTestData = () => {
-    // Apaga os agendamentos existentes no Supabase para zerar a nuvem também
-    appointments.forEach((apt) => {
-      deleteAppointmentFromSupabase(apt.id);
-    });
+    // Apaga todos os agendamentos da tabela 'appointments' no Supabase
+    deleteAllAppointmentsFromSupabase();
 
     setAppointments([]);
     setReviews([]);
     setNotifications([]);
     setIsSystemCleaned(true);
-    localStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify([]));
+    const legacyKeys = [
+      'estudiovip_appointments_v9',
+      'estudiovip_appointments_v8',
+      'estudiovip_appointments_v7',
+      'estudiovip_appointments_v6',
+      'estudiovip_appointments',
+      'estudio_vip_appointments',
+    ];
+    legacyKeys.forEach((key) => localStorage.removeItem(key));
     localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify([]));
     localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify([]));
     localStorage.setItem('estudiovip_clean_state_active', 'true');
     showToast(
-      'Dados de teste limpos com sucesso! Agendamentos e avaliações simuladas foram apagados. Seus serviços, preços, regras e expediente permanecem 100% intactos.',
+      'Dados de teste limpos com sucesso! Agendamentos removidos do Supabase e avaliações simuladas apagadas. Seus serviços, preços, regras e expediente permanecem 100% intactos.',
       'success',
       'Sistema Zerado para Clientes Reais'
     );

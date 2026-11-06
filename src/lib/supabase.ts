@@ -135,41 +135,7 @@ export async function insertAppointmentToSupabase(apt: Appointment): Promise<boo
     const { error } = await supabase.from('appointments').insert([row]);
     if (error) {
       console.warn('Supabase insertAppointment error:', error.message || error);
-      // Try camelCase fallback if table was created with camelCase
-      const camelRow = {
-        id: apt.id,
-        clientName: apt.clientName,
-        clientPhone: apt.clientPhone,
-        clientEmail: apt.clientEmail || null,
-        serviceId: apt.serviceId,
-        serviceName: apt.serviceName,
-        servicePrice: apt.servicePrice,
-        serviceDuration: apt.serviceDuration,
-        services: apt.services || null,
-        serviceIds: apt.serviceIds || null,
-        date: apt.date,
-        time: apt.time,
-        toleranceExpiryTime: apt.toleranceExpiryTime,
-        paymentType: apt.paymentType,
-        paymentMethod: apt.paymentMethod,
-        paymentStatus: apt.paymentStatus,
-        depositAmount: apt.depositAmount ?? 0,
-        remainingAmount: apt.remainingAmount ?? 0,
-        remainingPaymentMethod: apt.remainingPaymentMethod || null,
-        status: apt.status,
-        cancellationReason: apt.cancellationReason || null,
-        cancelledAt: apt.cancelledAt || null,
-        createdAt: apt.createdAt || new Date().toISOString(),
-        checkedInAt: apt.checkedInAt || null,
-        completedAt: apt.completedAt || null,
-        notes: apt.notes || null,
-      };
-      const fallback = await supabase.from('appointments').insert([camelRow]);
-      if (fallback.error) {
-        console.warn('Supabase insert fallback also failed:', fallback.error.message);
-        return false;
-      }
-      return true;
+      return false;
     }
     return true;
   } catch (err) {
@@ -179,7 +145,7 @@ export async function insertAppointmentToSupabase(apt: Appointment): Promise<boo
 }
 
 /**
- * Update appointment in Supabase
+ * Update appointment in Supabase using the exact snake_case columns
  */
 export async function updateAppointmentInSupabase(
   id: string,
@@ -189,37 +155,19 @@ export async function updateAppointmentInSupabase(
     const patch: Record<string, any> = {};
 
     if (updates.status !== undefined) patch.status = updates.status;
-    if (updates.paymentStatus !== undefined) {
-      patch.payment_status = updates.paymentStatus;
-      patch.paymentStatus = updates.paymentStatus;
-    }
-    if (updates.paymentMethod !== undefined) {
-      patch.payment_method = updates.paymentMethod;
-      patch.paymentMethod = updates.paymentMethod;
-    }
-    if (updates.checkedInAt !== undefined) {
-      patch.checked_in_at = updates.checkedInAt;
-      patch.checkedInAt = updates.checkedInAt;
-    }
-    if (updates.completedAt !== undefined) {
-      patch.completed_at = updates.completedAt;
-      patch.completedAt = updates.completedAt;
-    }
-    if (updates.cancelledAt !== undefined) {
-      patch.cancelled_at = updates.cancelledAt;
-      patch.cancelledAt = updates.cancelledAt;
-    }
-    if (updates.cancellationReason !== undefined) {
-      patch.cancellation_reason = updates.cancellationReason;
-      patch.cancellationReason = updates.cancellationReason;
-    }
+    if (updates.paymentStatus !== undefined) patch.payment_status = updates.paymentStatus;
+    if (updates.paymentMethod !== undefined) patch.payment_method = updates.paymentMethod;
+    if (updates.checkedInAt !== undefined) patch.checked_in_at = updates.checkedInAt;
+    if (updates.completedAt !== undefined) patch.completed_at = updates.completedAt;
+    if (updates.cancelledAt !== undefined) patch.cancelled_at = updates.cancelledAt;
+    if (updates.cancellationReason !== undefined) patch.cancellation_reason = updates.cancellationReason;
     if (updates.date !== undefined) patch.date = updates.date;
     if (updates.time !== undefined) patch.time = updates.time;
-    if (updates.toleranceExpiryTime !== undefined) {
-      patch.tolerance_expiry_time = updates.toleranceExpiryTime;
-      patch.toleranceExpiryTime = updates.toleranceExpiryTime;
-    }
+    if (updates.toleranceExpiryTime !== undefined) patch.tolerance_expiry_time = updates.toleranceExpiryTime;
     if (updates.notes !== undefined) patch.notes = updates.notes;
+    if (updates.depositAmount !== undefined) patch.deposit_amount = updates.depositAmount;
+    if (updates.remainingAmount !== undefined) patch.remaining_amount = updates.remainingAmount;
+    if (updates.remainingPaymentMethod !== undefined) patch.remaining_payment_method = updates.remainingPaymentMethod;
 
     const { error } = await supabase.from('appointments').update(patch).eq('id', id);
     if (error) {
@@ -251,49 +199,59 @@ export async function deleteAppointmentFromSupabase(id: string): Promise<boolean
 }
 
 /**
+ * Delete all appointments from Supabase (used when resetting test data)
+ */
+export async function deleteAllAppointmentsFromSupabase(): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('appointments').delete().neq('id', '___never_match___');
+    if (error) {
+      console.warn('Supabase deleteAllAppointments error:', error.message || error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Network error deleting all appointments from Supabase:', err);
+    return false;
+  }
+}
+
+/**
  * Subscribes to Realtime appointment changes from Supabase.
  * Notifies the callback whenever an appointment is INSERTed, UPDATEd, or DELETEd.
  */
 export function subscribeToAppointmentsRealtime(
   onInsert: (appointment: Appointment) => void,
   onUpdate: (appointment: Appointment) => void,
-  onDelete: (id: string) => void
+  onDelete: (id: string) => void,
+  onStatusChange?: (status: string) => void
 ): () => void {
   let channel: RealtimeChannel | null = null;
 
   try {
     channel = supabase
-      .channel('public:appointments')
+      .channel('realtime_appointments_channel')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'appointments' },
+        { event: '*', schema: 'public', table: 'appointments' },
         (payload) => {
-          if (payload.new) {
+          if (payload.eventType === 'INSERT' && payload.new) {
             const apt = fromSupabaseRow(payload.new);
             onInsert(apt);
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'appointments' },
-        (payload) => {
-          if (payload.new) {
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
             const apt = fromSupabaseRow(payload.new);
             onUpdate(apt);
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'appointments' },
-        (payload) => {
-          if (payload.old && payload.old.id) {
-            onDelete(String(payload.old.id));
+          } else if (payload.eventType === 'DELETE' && payload.old) {
+            const id = payload.old.id ? String(payload.old.id) : '';
+            if (id) {
+              onDelete(id);
+            }
           }
         }
       )
       .subscribe((status) => {
+        if (onStatusChange) {
+          onStatusChange(status);
+        }
         if (status === 'SUBSCRIBED') {
           console.log('⚡ Conectado ao Supabase Realtime (Agendamentos ao vivo)!');
         }
