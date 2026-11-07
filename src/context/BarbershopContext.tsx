@@ -28,12 +28,15 @@ import {
   playNotificationChime 
 } from '../services/pushNotificationService';
 import {
+  fetchAppointmentsAndStatusFromSupabase,
   fetchAppointmentsFromSupabase,
   insertAppointmentToSupabase,
   updateAppointmentInSupabase,
   deleteAppointmentFromSupabase,
   deleteAllAppointmentsFromSupabase,
   subscribeToAppointmentsRealtime,
+  saveBarbershopStatusToSupabase,
+  BarbershopGlobalStatus,
 } from '../lib/supabase';
 
 export interface ToastMessage {
@@ -190,7 +193,6 @@ const BarbershopContext = createContext<BarbershopContextType | undefined>(undef
 // Storage keys - Production clean keys for delivery to owner
 const STORAGE_KEYS = {
   SERVICES: 'estudiovip_services_v8',
-  SETTINGS: 'estudiovip_settings_v6',
   ANNOUNCEMENTS: 'estudiovip_announcements_v8',
   NOTIFICATIONS: 'estudiovip_notifications_v8',
   USER: 'estudiovip_user_v7',
@@ -274,35 +276,8 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   });
 
-  const [settings, setSettings] = useState<BarbershopSettings>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-      if (saved) {
-        const parsed: BarbershopSettings = JSON.parse(saved);
-        if (parsed.workingDays) {
-          parsed.workingDays = parsed.workingDays.map((wd: WorkingDayConfig) => {
-            if (wd.dayOfWeek === 0) {
-              return { 
-                ...wd, 
-                // Sunday is closed automatically by default as house policy (norma da casa)
-                active: parsed.manualOverrideStatus === 'open' ? true : false,
-                openTime: wd.openTime || '08:30', 
-                closeTime: wd.closeTime && wd.closeTime > '13:00' ? wd.closeTime : '19:00', 
-                hasLunchBreak: true, 
-                lunchStart: wd.lunchStart || '12:00', 
-                lunchEnd: wd.lunchEnd || '14:00' 
-              };
-            }
-            return wd;
-          });
-        }
-        return parsed;
-      }
-      return initialSettings;
-    } catch {
-      return initialSettings;
-    }
-  });
+  // Status de funcionamento (Aberto/Fechado) e horários bloqueados são sincronizados exclusivamente via Supabase em tempo real
+  const [settings, setSettings] = useState<BarbershopSettings>(initialSettings);
 
   // Agendamentos em Tempo Real: gerenciados e lidos exclusivamente da tabela 'appointments' do Supabase
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -387,18 +362,13 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   }, [services]);
 
+  // Limpeza de cache legado de agendamentos e status no localStorage para usar estritamente o Supabase
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [settings]);
-
-  // Limpeza de cache legado de agendamentos no localStorage para usar estritamente o Supabase
-  useEffect(() => {
-    try {
-      const legacyAppointmentKeys = [
+      const legacyKeys = [
+        'estudiovip_settings_v6',
+        'estudiovip_settings_v5',
+        'estudiovip_settings',
         'estudiovip_appointments_v9',
         'estudiovip_appointments_v8',
         'estudiovip_appointments_v7',
@@ -406,7 +376,7 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
         'estudiovip_appointments',
         'estudio_vip_appointments',
       ];
-      legacyAppointmentKeys.forEach((key) => localStorage.removeItem(key));
+      legacyKeys.forEach((key) => localStorage.removeItem(key));
     } catch (e) {
       console.error(e);
     }
@@ -459,15 +429,24 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
   const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(false);
 
   // Função para recarregar agendamentos do Supabase sob demanda
+  // Função para recarregar agendamentos e status do Supabase sob demanda
   const refreshSupabaseAppointments = async () => {
     try {
-      const remoteApts = await fetchAppointmentsFromSupabase();
-      if (remoteApts) {
-        setAppointments(remoteApts);
+      const result = await fetchAppointmentsAndStatusFromSupabase();
+      if (result) {
+        setAppointments(result.appointments);
+        if (result.statusConfig) {
+          setSettings((prev) => ({
+            ...prev,
+            manualOverrideStatus: result.statusConfig!.manualOverrideStatus,
+            blockedSlotsByDate: result.statusConfig!.blockedSlotsByDate || prev.blockedSlotsByDate,
+            customUnlockedSlotsByDate: result.statusConfig!.customUnlockedSlotsByDate || prev.customUnlockedSlotsByDate,
+          }));
+        }
         setIsSupabaseConnected(true);
       }
     } catch (err) {
-      console.warn('Erro ao atualizar agendamentos do Supabase:', err);
+      console.warn('Erro ao atualizar agendamentos e status do Supabase:', err);
     }
   };
 
@@ -475,11 +454,19 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
   useEffect(() => {
     let isMounted = true;
 
-    const loadInitialAppointments = async () => {
+    const loadInitialData = async () => {
       try {
-        const remoteApts = await fetchAppointmentsFromSupabase();
-        if (remoteApts && isMounted) {
-          setAppointments(remoteApts);
+        const result = await fetchAppointmentsAndStatusFromSupabase();
+        if (result && isMounted) {
+          setAppointments(result.appointments);
+          if (result.statusConfig) {
+            setSettings((prev) => ({
+              ...prev,
+              manualOverrideStatus: result.statusConfig!.manualOverrideStatus,
+              blockedSlotsByDate: result.statusConfig!.blockedSlotsByDate || prev.blockedSlotsByDate,
+              customUnlockedSlotsByDate: result.statusConfig!.customUnlockedSlotsByDate || prev.customUnlockedSlotsByDate,
+            }));
+          }
           setIsSupabaseConnected(true);
         }
       } catch (e) {
@@ -487,9 +474,9 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
       }
     };
 
-    loadInitialAppointments();
+    loadInitialData();
 
-    // Inscrição no canal Realtime do Supabase (eventos INSERT, UPDATE, DELETE em tempo real)
+    // Inscrição no canal Realtime do Supabase (eventos INSERT, UPDATE, DELETE e status da barbearia em tempo real)
     const unsubscribe = subscribeToAppointmentsRealtime(
       (newApt) => {
         setAppointments((prev) => {
@@ -533,6 +520,38 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
         if (status === 'SUBSCRIBED') {
           setIsSupabaseConnected(true);
         }
+      },
+      (statusConfig: BarbershopGlobalStatus) => {
+        // Atualização em tempo real do status de funcionamento (Aberto/Fechado) e horários bloqueados
+        setSettings((prev) => {
+          let updatedWorkingDays = prev.workingDays;
+          if (statusConfig.manualOverrideStatus === 'auto') {
+            updatedWorkingDays = prev.workingDays.map((wd) => {
+              if (wd.dayOfWeek === 0) {
+                return { ...wd, active: false };
+              }
+              return wd;
+            });
+          }
+          return {
+            ...prev,
+            manualOverrideStatus: statusConfig.manualOverrideStatus,
+            blockedSlotsByDate: statusConfig.blockedSlotsByDate || prev.blockedSlotsByDate,
+            customUnlockedSlotsByDate: statusConfig.customUnlockedSlotsByDate || prev.customUnlockedSlotsByDate,
+            workingDays: updatedWorkingDays,
+          };
+        });
+
+        playNotificationChime();
+        showToast(
+          statusConfig.manualOverrideStatus === 'open'
+            ? 'Barbearia ABERTA em tempo real! Horários disponíveis.'
+            : statusConfig.manualOverrideStatus === 'closed'
+            ? 'Barbearia FECHADA em tempo real pelo proprietário!'
+            : 'Barbearia em modo AUTOMÁTICO de expediente.',
+          'info',
+          '⚡ Supabase Sincronizado'
+        );
       }
     );
 
@@ -619,6 +638,15 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  // Helper para persistir o status e horários no Supabase em tempo real
+  const syncSettingsToSupabase = (s: BarbershopSettings) => {
+    saveBarbershopStatusToSupabase({
+      manualOverrideStatus: s.manualOverrideStatus || 'auto',
+      blockedSlotsByDate: s.blockedSlotsByDate || {},
+      customUnlockedSlotsByDate: s.customUnlockedSlotsByDate || {},
+    });
+  };
+
   // Owner manual toggle for Open / Closed
   const setManualBarbershopStatus = (status: 'open' | 'closed' | 'auto') => {
     setSettings((prev) => {
@@ -632,15 +660,20 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
           return wd;
         });
       }
-      return {
+      const updated = {
         ...prev,
         manualOverrideStatus: status,
         workingDays: updatedWorkingDays,
       };
+
+      // Salva no Supabase em tempo real para sincronizar PC e celular instantaneamente
+      syncSettingsToSupabase(updated);
+
+      return updated;
     });
 
     if (status === 'open') {
-      showToast('Barbearia ativada como ABERTA pelo proprietário! Horários de hoje disponíveis para agendamento.', 'success', 'Expediente Aberto');
+      showToast('Barbearia ativada como ABERTA! Horários liberados em tempo real no PC e telemóvel.', 'success', 'Expediente Aberto');
     } else if (status === 'closed') {
       showToast('Barbearia desativada como FECHADA pelo proprietário!', 'warning', 'Expediente Fechado');
     } else {
@@ -758,13 +791,17 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
       ? currentlyBlocked.filter((s) => s !== timeSlot)
       : [...currentlyBlocked, timeSlot];
 
-    setSettings((prev) => ({
-      ...prev,
-      blockedSlotsByDate: {
-        ...(prev.blockedSlotsByDate || {}),
-        [dateString]: updated,
-      },
-    }));
+    setSettings((prev) => {
+      const updatedSettings = {
+        ...prev,
+        blockedSlotsByDate: {
+          ...(prev.blockedSlotsByDate || {}),
+          [dateString]: updated,
+        },
+      };
+      syncSettingsToSupabase(updatedSettings);
+      return updatedSettings;
+    });
 
     if (isAlreadyBlocked) {
       showToast(`Horário das ${timeSlot} disponibilizado para agendamento!`, 'success', 'Horário Liberado');
@@ -777,13 +814,15 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     setSettings((prev) => {
       const currentBlocked = prev.blockedSlotsByDate?.[dateString] || [];
       const merged = Array.from(new Set([...currentBlocked, ...slotsToBlock]));
-      return {
+      const updatedSettings = {
         ...prev,
         blockedSlotsByDate: {
           ...(prev.blockedSlotsByDate || {}),
           [dateString]: merged,
         },
       };
+      syncSettingsToSupabase(updatedSettings);
+      return updatedSettings;
     });
     showToast(`${slotsToBlock.length} horários foram retirados da agenda.`, 'warning', 'Horários Bloqueados');
   };
@@ -792,26 +831,32 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     setSettings((prev) => {
       const currentBlocked = prev.blockedSlotsByDate?.[dateString] || [];
       const updated = currentBlocked.filter((s) => !slotsToUnblock.includes(s));
-      return {
+      const updatedSettings = {
         ...prev,
         blockedSlotsByDate: {
           ...(prev.blockedSlotsByDate || {}),
           [dateString]: updated,
         },
       };
+      syncSettingsToSupabase(updatedSettings);
+      return updatedSettings;
     });
     showToast(`${slotsToUnblock.length} horários foram disponibilizados na agenda!`, 'success', 'Horários Liberados');
   };
 
   const blockAllSlotsForDate = (dateString: string) => {
     const allSlots = getAvailableSlots(dateString).map((s) => s.time);
-    setSettings((prev) => ({
-      ...prev,
-      blockedSlotsByDate: {
-        ...(prev.blockedSlotsByDate || {}),
-        [dateString]: allSlots,
-      },
-    }));
+    setSettings((prev) => {
+      const updatedSettings = {
+        ...prev,
+        blockedSlotsByDate: {
+          ...(prev.blockedSlotsByDate || {}),
+          [dateString]: allSlots,
+        },
+      };
+      syncSettingsToSupabase(updatedSettings);
+      return updatedSettings;
+    });
     showToast('Todos os horários desta data foram bloqueados na agenda.', 'warning', 'Agenda Bloqueada');
   };
 
@@ -819,10 +864,12 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     setSettings((prev) => {
       const nextMap = { ...(prev.blockedSlotsByDate || {}) };
       delete nextMap[dateString];
-      return {
+      const updatedSettings = {
         ...prev,
         blockedSlotsByDate: nextMap,
       };
+      syncSettingsToSupabase(updatedSettings);
+      return updatedSettings;
     });
     showToast('Todos os horários desta data foram disponibilizados para os clientes!', 'success', 'Agenda Totalmente Liberada');
   };
@@ -834,13 +881,17 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
       ? currentlyUnlocked.filter((s) => s !== timeSlot)
       : [...currentlyUnlocked, timeSlot];
 
-    setSettings((prev) => ({
-      ...prev,
-      customUnlockedSlotsByDate: {
-        ...(prev.customUnlockedSlotsByDate || {}),
-        [dateString]: updated,
-      },
-    }));
+    setSettings((prev) => {
+      const updatedSettings = {
+        ...prev,
+        customUnlockedSlotsByDate: {
+          ...(prev.customUnlockedSlotsByDate || {}),
+          [dateString]: updated,
+        },
+      };
+      syncSettingsToSupabase(updatedSettings);
+      return updatedSettings;
+    });
 
     if (isUnlocked) {
       showToast(`Horário das ${timeSlot} voltou ao intervalo de almoço fechado.`, 'info');

@@ -102,10 +102,103 @@ export function fromSupabaseRow(row: Record<string, any>): Appointment {
   };
 }
 
+export const BARBERSHOP_STATUS_DOC_ID = 'system_barbershop_status';
+
+export interface BarbershopGlobalStatus {
+  manualOverrideStatus: 'open' | 'closed' | 'auto';
+  blockedSlotsByDate?: Record<string, string[]>;
+  customUnlockedSlotsByDate?: Record<string, string[]>;
+  updatedAt?: string;
+}
+
 /**
- * Fetch all appointments from Supabase
+ * Checks if a row in the appointments table is the special system status record
  */
-export async function fetchAppointmentsFromSupabase(): Promise<Appointment[] | null> {
+export function isBarbershopStatusRow(row: Record<string, any>): boolean {
+  if (!row) return false;
+  return (
+    String(row.id) === BARBERSHOP_STATUS_DOC_ID ||
+    row.client_name === 'CONFIGURACAO_SISTEMA' ||
+    row.service_name === 'STATUS_BARBEARIA'
+  );
+}
+
+/**
+ * Parses the barbershop status record from the Supabase row
+ */
+export function parseBarbershopStatusFromRow(row: Record<string, any>): BarbershopGlobalStatus {
+  let notesData: any = {};
+  if (row.notes) {
+    try {
+      notesData = typeof row.notes === 'string' ? JSON.parse(row.notes) : row.notes;
+    } catch {
+      notesData = {};
+    }
+  }
+
+  const rawStatus = (row.status || notesData.manualOverrideStatus || 'auto') as string;
+  const manualOverrideStatus: 'open' | 'closed' | 'auto' =
+    rawStatus === 'open' || rawStatus === 'closed' ? rawStatus : 'auto';
+
+  return {
+    manualOverrideStatus,
+    blockedSlotsByDate: notesData.blockedSlotsByDate || {},
+    customUnlockedSlotsByDate: notesData.customUnlockedSlotsByDate || {},
+    updatedAt: notesData.updatedAt || row.created_at || new Date().toISOString(),
+  };
+}
+
+/**
+ * Saves the barbershop open/closed status and schedule slot blocks directly in Supabase
+ */
+export async function saveBarbershopStatusToSupabase(
+  statusData: BarbershopGlobalStatus
+): Promise<boolean> {
+  try {
+    const payload = {
+      id: BARBERSHOP_STATUS_DOC_ID,
+      client_name: 'CONFIGURACAO_SISTEMA',
+      client_phone: '00000000000',
+      client_email: null,
+      service_id: 'sys-status',
+      service_name: 'STATUS_BARBEARIA',
+      service_price: 0,
+      service_duration: 0,
+      date: '2099-12-31',
+      time: '00:00',
+      tolerance_expiry_time: '00:00',
+      payment_type: 'presencial',
+      payment_method: 'pix',
+      payment_status: 'pago',
+      status: statusData.manualOverrideStatus,
+      notes: JSON.stringify({
+        manualOverrideStatus: statusData.manualOverrideStatus,
+        blockedSlotsByDate: statusData.blockedSlotsByDate || {},
+        customUnlockedSlotsByDate: statusData.customUnlockedSlotsByDate || {},
+        updatedAt: new Date().toISOString(),
+      }),
+      created_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('appointments').upsert([payload]);
+    if (error) {
+      console.warn('Erro ao salvar status da barbearia no Supabase:', error.message || error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Exceção ao salvar status da barbearia no Supabase:', err);
+    return false;
+  }
+}
+
+/**
+ * Fetch all appointments AND barbershop status together from Supabase
+ */
+export async function fetchAppointmentsAndStatusFromSupabase(): Promise<{
+  appointments: Appointment[];
+  statusConfig: BarbershopGlobalStatus | null;
+} | null> {
   try {
     const { data, error } = await supabase
       .from('appointments')
@@ -118,12 +211,32 @@ export async function fetchAppointmentsFromSupabase(): Promise<Appointment[] | n
       return null;
     }
 
-    if (!data) return [];
-    return data.map(fromSupabaseRow);
+    if (!data) return { appointments: [], statusConfig: null };
+
+    let statusConfig: BarbershopGlobalStatus | null = null;
+    const clientAppointments: Appointment[] = [];
+
+    for (const row of data) {
+      if (isBarbershopStatusRow(row)) {
+        statusConfig = parseBarbershopStatusFromRow(row);
+      } else {
+        clientAppointments.push(fromSupabaseRow(row));
+      }
+    }
+
+    return { appointments: clientAppointments, statusConfig };
   } catch (err) {
     console.warn('Network error reaching Supabase:', err);
     return null;
   }
+}
+
+/**
+ * Fetch all client appointments from Supabase (filtering out internal system rows)
+ */
+export async function fetchAppointmentsFromSupabase(): Promise<Appointment[] | null> {
+  const res = await fetchAppointmentsAndStatusFromSupabase();
+  return res ? res.appointments : null;
 }
 
 /**
@@ -199,11 +312,15 @@ export async function deleteAppointmentFromSupabase(id: string): Promise<boolean
 }
 
 /**
- * Delete all appointments from Supabase (used when resetting test data)
+ * Delete all client appointments from Supabase (used when resetting test data),
+ * keeping the system barbershop status row intact.
  */
 export async function deleteAllAppointmentsFromSupabase(): Promise<boolean> {
   try {
-    const { error } = await supabase.from('appointments').delete().neq('id', '___never_match___');
+    const { error } = await supabase
+      .from('appointments')
+      .delete()
+      .neq('id', BARBERSHOP_STATUS_DOC_ID);
     if (error) {
       console.warn('Supabase deleteAllAppointments error:', error.message || error);
       return false;
@@ -216,14 +333,15 @@ export async function deleteAllAppointmentsFromSupabase(): Promise<boolean> {
 }
 
 /**
- * Subscribes to Realtime appointment changes from Supabase.
- * Notifies the callback whenever an appointment is INSERTed, UPDATEd, or DELETEd.
+ * Subscribes to Realtime appointment AND barbershop status changes from Supabase.
+ * Notifies callbacks whenever an appointment or the shop status is modified.
  */
 export function subscribeToAppointmentsRealtime(
   onInsert: (appointment: Appointment) => void,
   onUpdate: (appointment: Appointment) => void,
   onDelete: (id: string) => void,
-  onStatusChange?: (status: string) => void
+  onStatusChange?: (status: string) => void,
+  onBarbershopStatusChange?: (statusConfig: BarbershopGlobalStatus) => void
 ): () => void {
   let channel: RealtimeChannel | null = null;
 
@@ -234,6 +352,19 @@ export function subscribeToAppointmentsRealtime(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'appointments' },
         (payload) => {
+          // If the changed row is the system barbershop status row
+          const candidateRow = (payload.new && Object.keys(payload.new).length > 0)
+            ? payload.new
+            : payload.old;
+
+          if (candidateRow && isBarbershopStatusRow(candidateRow)) {
+            if (payload.new && onBarbershopStatusChange) {
+              const statusConfig = parseBarbershopStatusFromRow(payload.new);
+              onBarbershopStatusChange(statusConfig);
+            }
+            return;
+          }
+
           if (payload.eventType === 'INSERT' && payload.new) {
             const apt = fromSupabaseRow(payload.new);
             onInsert(apt);
@@ -242,7 +373,7 @@ export function subscribeToAppointmentsRealtime(
             onUpdate(apt);
           } else if (payload.eventType === 'DELETE' && payload.old) {
             const id = payload.old.id ? String(payload.old.id) : '';
-            if (id) {
+            if (id && id !== BARBERSHOP_STATUS_DOC_ID) {
               onDelete(id);
             }
           }
@@ -253,7 +384,7 @@ export function subscribeToAppointmentsRealtime(
           onStatusChange(status);
         }
         if (status === 'SUBSCRIBED') {
-          console.log('⚡ Conectado ao Supabase Realtime (Agendamentos ao vivo)!');
+          console.log('⚡ Conectado ao Supabase Realtime (Agendamentos e Status ao vivo)!');
         }
       });
   } catch (err) {
