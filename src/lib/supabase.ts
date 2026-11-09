@@ -616,3 +616,242 @@ export function subscribeToAppointmentsRealtime(
     }
   };
 }
+
+/**
+ * Interface representing a notification row in Supabase 'notifications' table
+ */
+export interface SupabaseNotification {
+  id: string | number;
+  title: string;
+  message: string;
+  type?: string;
+  created_at?: string;
+}
+
+/**
+ * Normalizes rows from the notifications table (handling potential Portuguese or alternate column names)
+ */
+export function normalizeNotificationRow(row: Record<string, any>): SupabaseNotification {
+  return {
+    id: row.id ?? `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    title: row.title ?? row.titulo ?? 'Aviso da Barbearia',
+    message: row.message ?? row.mensagem ?? row.content ?? row.texto ?? '',
+    type: row.type ?? row.tipo ?? 'aviso',
+    created_at: row.created_at ?? row.data ?? new Date().toISOString(),
+  };
+}
+
+/**
+ * Sends/inserts a new notification/announcement into Supabase 'notifications' table.
+ * All connected clients receive it instantly via Supabase Realtime.
+ */
+export async function sendNotificationToSupabase(notif: {
+  title: string;
+  message: string;
+  type?: string;
+}): Promise<SupabaseNotification | null> {
+  const title = (notif.title || '').trim();
+  const message = (notif.message || '').trim();
+  const type = (notif.type || 'aviso').trim();
+
+  if (!title || !message) {
+    console.error('❌ [sendNotificationToSupabase] Título e mensagem são obrigatórios.');
+    return null;
+  }
+
+  try {
+    console.log('🚀 [sendNotificationToSupabase] Inserindo aviso na tabela notifications:', { title, message, type });
+
+    // Tentativa 1: Colunas padrão em inglês (title, message, type, created_at)
+    const payload = {
+      title,
+      message,
+      type,
+      created_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .insert([payload])
+      .select();
+
+    if (!error && data && data.length > 0) {
+      const inserted = normalizeNotificationRow(data[0]);
+      console.log('✅ [sendNotificationToSupabase] Aviso gravado com sucesso no Supabase:', inserted);
+      return inserted;
+    }
+
+    if (error) {
+      console.warn('⚠️ [sendNotificationToSupabase] Tentativa padrão falhou, testando variações de esquema:', error.message);
+
+      // Fallback 1: se as colunas forem em português (titulo, mensagem, tipo)
+      if (error.message && (error.message.includes('column') || error.code === '42703')) {
+        const ptPayload = {
+          titulo: title,
+          mensagem: message,
+          tipo: type,
+          created_at: new Date().toISOString(),
+        };
+        const { data: ptData, error: ptError } = await supabase
+          .from('notifications')
+          .insert([ptPayload])
+          .select();
+
+        if (!ptError && ptData && ptData.length > 0) {
+          const inserted = normalizeNotificationRow(ptData[0]);
+          console.log('✅ [sendNotificationToSupabase] Gravado com sucesso (esquema PT):', inserted);
+          return inserted;
+        }
+
+        // Fallback 2: coluna content em vez de message
+        const contentPayload = {
+          title,
+          content: message,
+          type,
+          created_at: new Date().toISOString(),
+        };
+        const { data: cData, error: cError } = await supabase
+          .from('notifications')
+          .insert([contentPayload])
+          .select();
+
+        if (!cError && cData && cData.length > 0) {
+          const inserted = normalizeNotificationRow(cData[0]);
+          console.log('✅ [sendNotificationToSupabase] Gravado com sucesso (esquema content):', inserted);
+          return inserted;
+        }
+
+        // Fallback 3: payload simples apenas com title e message (sem created_at)
+        const simplePayload = {
+          title,
+          message,
+        };
+        const { data: sData, error: sError } = await supabase
+          .from('notifications')
+          .insert([simplePayload])
+          .select();
+
+        if (!sError && sData && sData.length > 0) {
+          const inserted = normalizeNotificationRow(sData[0]);
+          console.log('✅ [sendNotificationToSupabase] Gravado com sucesso (esquema simples):', inserted);
+          return inserted;
+        }
+
+        console.error('❌ [sendNotificationToSupabase] Todas as tentativas falharam:', {
+          original: error,
+          ptError,
+          cError,
+          sError,
+        });
+        return null;
+      }
+
+      console.error('❌ [sendNotificationToSupabase] Erro ao gravar aviso na tabela notifications:', error);
+      return null;
+    }
+
+    return null;
+  } catch (err) {
+    console.error('❌ [sendNotificationToSupabase] Exceção inesperada:', err);
+    return null;
+  }
+}
+
+/**
+ * Fetches the most recent notifications from the 'notifications' table
+ */
+export async function fetchNotificationsFromSupabase(): Promise<SupabaseNotification[] | null> {
+  try {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(30);
+
+    if (error) {
+      // Fallback sem ordenação de created_at caso o nome da coluna de data seja diferente
+      const { data: fbData, error: fbError } = await supabase
+        .from('notifications')
+        .select('*')
+        .limit(30);
+
+      if (fbError) {
+        console.warn('⚠️ [fetchNotificationsFromSupabase] Erro ao carregar avisos:', fbError.message);
+        return null;
+      }
+      return (fbData || []).map(normalizeNotificationRow);
+    }
+
+    return (data || []).map(normalizeNotificationRow);
+  } catch (err) {
+    console.warn('⚠️ [fetchNotificationsFromSupabase] Exceção de rede:', err);
+    return null;
+  }
+}
+
+/**
+ * Deletes a notification from the 'notifications' table
+ */
+export async function deleteNotificationFromSupabase(id: string | number): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('❌ [deleteNotificationFromSupabase] Erro ao excluir aviso:', error);
+      return false;
+    }
+    console.log(`✅ [deleteNotificationFromSupabase] Aviso ${id} removido com sucesso.`);
+    return true;
+  } catch (err) {
+    console.error('❌ [deleteNotificationFromSupabase] Exceção ao excluir aviso:', err);
+    return false;
+  }
+}
+
+/**
+ * Subscribes in Realtime to the 'notifications' table in Supabase.
+ * Triggers callback whenever a new notice is inserted or deleted by the barber.
+ */
+export function subscribeToNotificationsRealtime(
+  onInsert: (notification: SupabaseNotification) => void,
+  onDelete?: (id: string | number) => void
+): () => void {
+  let channel: RealtimeChannel | null = null;
+
+  try {
+    channel = supabase
+      .channel('realtime_notifications_feed_channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications' },
+        (payload) => {
+          console.log('⚡ [Realtime Notifications Event]', payload.eventType, payload);
+
+          if (payload.eventType === 'INSERT' && payload.new) {
+            const notif = normalizeNotificationRow(payload.new);
+            onInsert(notif);
+          } else if (payload.eventType === 'DELETE' && payload.old) {
+            if (onDelete && payload.old.id) {
+              onDelete(payload.old.id);
+            }
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('⚡ Conectado ao Supabase Realtime (Tabela notifications ativa)!');
+        }
+      });
+  } catch (err) {
+    console.warn('⚠️ Erro ao registrar canal Realtime para notifications:', err);
+  }
+
+  return () => {
+    if (channel) {
+      supabase.removeChannel(channel);
+    }
+  };
+}

@@ -36,6 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
     adminActiveTab, 
     setAdminActiveTab,
     notifications,
+    supabaseNotifications,
     currentUser,
     appointments,
     simulateIncomingBooking,
@@ -242,6 +243,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
             >
               <Megaphone className="w-3.5 h-3.5 shrink-0" />
               <span>Avisos</span>
+              {supabaseNotifications.length > 0 && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5" title="Avisos ao vivo do barbeiro" />
+              )}
             </button>
             <button
               onClick={() => setClientActiveTab('barber')}
@@ -570,8 +574,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            <div className={`p-1 rounded-lg ${activeView === 'client' && clientActiveTab === 'announcements' ? 'bg-amber-500/20 text-amber-400' : ''}`}>
+            <div className={`relative p-1 rounded-lg ${activeView === 'client' && clientActiveTab === 'announcements' ? 'bg-amber-500/20 text-amber-400' : ''}`}>
               <Megaphone className="w-5 h-5" />
+              {supabaseNotifications.length > 0 && (
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-pulse ring-2 ring-zinc-950" />
+              )}
             </div>
             <span className="text-[10px] mt-0.5 tracking-tight">Avisos</span>
           </button>

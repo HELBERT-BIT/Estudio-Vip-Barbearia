@@ -38,6 +38,11 @@ import {
   saveBarbershopStatusToSupabase,
   insertClientIfNotExistsToSupabase,
   fetchClientsFromSupabase,
+  sendNotificationToSupabase,
+  fetchNotificationsFromSupabase,
+  deleteNotificationFromSupabase,
+  subscribeToNotificationsRealtime,
+  SupabaseNotification,
   BarbershopGlobalStatus,
 } from '../lib/supabase';
 
@@ -77,6 +82,12 @@ interface BarbershopContextType {
   clientActiveTab: 'home' | 'booking' | 'services' | 'my-appointments' | 'announcements' | 'barber';
   adminActiveTab: 'overview' | 'appointments' | 'services' | 'schedule' | 'payments' | 'announcements' | 'cancellations' | 'reviews' | 'clients';
   toasts: ToastMessage[];
+
+  // Avisos em Tempo Real do Supabase (Tabela notifications)
+  supabaseNotifications: SupabaseNotification[];
+  sendBarberAnnouncement: (title: string, message: string, type?: string) => Promise<boolean>;
+  deleteBarberAnnouncement: (id: string | number) => Promise<boolean>;
+  refreshSupabaseNotifications: () => Promise<void>;
 
   // Supabase Realtime
   refreshSupabaseAppointments: () => Promise<void>;
@@ -321,6 +332,9 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   });
 
+  // Avisos Oficiais em Tempo Real da tabela 'notifications' do Supabase
+  const [supabaseNotifications, setSupabaseNotifications] = useState<SupabaseNotification[]>([]);
+
   // Estado de Autenticação Global do Administrador (Protege contra vazamento de botões/portas/alertas antes do login)
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
     try {
@@ -458,9 +472,10 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
 
     const loadInitialData = async () => {
       try {
-        const [result, supabaseClients] = await Promise.all([
+        const [result, supabaseClients, supabaseNotifs] = await Promise.all([
           fetchAppointmentsAndStatusFromSupabase(),
           fetchClientsFromSupabase(),
+          fetchNotificationsFromSupabase(),
         ]);
 
         if (result && isMounted) {
@@ -474,6 +489,11 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
             }));
           }
           setIsSupabaseConnected(true);
+        }
+
+        // Sincroniza avisos em tempo real vindos da tabela 'notifications' do Supabase
+        if (supabaseNotifs && Array.isArray(supabaseNotifs) && isMounted) {
+          setSupabaseNotifications(supabaseNotifs);
         }
 
         // Sincroniza clientes vindos da tabela 'client' do Supabase
@@ -522,8 +542,8 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
 
     loadInitialData();
 
-    // Inscrição no canal Realtime do Supabase (eventos INSERT, UPDATE, DELETE e status da barbearia em tempo real)
-    const unsubscribe = subscribeToAppointmentsRealtime(
+    // Inscrição 1: Canal Realtime para agendamentos e status da barbearia
+    const unsubscribeAppointments = subscribeToAppointmentsRealtime(
       (newApt) => {
         setAppointments((prev) => {
           if (prev.some((a) => a.id === newApt.id)) {
@@ -568,7 +588,6 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
         }
       },
       (statusConfig: BarbershopGlobalStatus) => {
-        // Atualização em tempo real do status de funcionamento (Aberto/Fechado) e horários bloqueados
         setSettings((prev) => {
           let updatedWorkingDays = prev.workingDays;
           if (statusConfig.manualOverrideStatus === 'auto') {
@@ -601,11 +620,109 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
       }
     );
 
+    // Inscrição 2: Canal Realtime para a tabela 'notifications' (Avisos do Barbeiro em Tempo Real)
+    const unsubscribeNotifications = subscribeToNotificationsRealtime(
+      (newNotif) => {
+        console.log('⚡ [Realtime Notification Recebida pelo Cliente]:', newNotif);
+        setSupabaseNotifications((prev) => {
+          if (prev.some((n) => String(n.id) === String(newNotif.id))) return prev;
+          return [newNotif, ...prev];
+        });
+
+        // Som de sino suave de notificação
+        playNotificationChime();
+
+        // Alerta visual de aviso publicado pelo Mariano
+        showToast(
+          newNotif.message || newNotif.title,
+          'info',
+          `📢 ${newNotif.title}`
+        );
+
+        // Dispara notificação push nativa para clientes com permissão ativada
+        sendPushNotificationToClients({
+          title: `💈 ${newNotif.title}`,
+          body: newNotif.message,
+          type: 'aviso_geral',
+          url: '/',
+        }).catch(() => {});
+      },
+      (deletedId) => {
+        setSupabaseNotifications((prev) => prev.filter((n) => String(n.id) !== String(deletedId)));
+      }
+    );
+
     return () => {
       isMounted = false;
-      unsubscribe();
+      unsubscribeAppointments();
+      unsubscribeNotifications();
     };
   }, []);
+
+  // Funções de Gestão de Avisos do Barbeiro (Tabela notifications)
+  const refreshSupabaseNotifications = async (): Promise<void> => {
+    try {
+      const data = await fetchNotificationsFromSupabase();
+      if (data) {
+        setSupabaseNotifications(data);
+      }
+    } catch (e) {
+      console.warn('Erro ao atualizar avisos do Supabase:', e);
+    }
+  };
+
+  const sendBarberAnnouncement = async (
+    title: string,
+    message: string,
+    type: string = 'aviso'
+  ): Promise<boolean> => {
+    try {
+      const created = await sendNotificationToSupabase({ title, message, type });
+      if (created) {
+        setSupabaseNotifications((prev) => [
+          created,
+          ...prev.filter((n) => String(n.id) !== String(created.id)),
+        ]);
+
+        showToast(
+          'Aviso publicado com sucesso e transmitido em tempo real aos clientes!',
+          'success',
+          '⚡ Supabase Realtime'
+        );
+
+        // Notifica também os dispositivos com Web Push ativo
+        sendPushNotificationToClients({
+          title: `💈 ${title}`,
+          body: message,
+          type: 'aviso_geral',
+          url: '/',
+        }).catch(() => {});
+
+        return true;
+      }
+      showToast('Falha ao gravar aviso na tabela notifications do Supabase.', 'error');
+      return false;
+    } catch (err) {
+      console.error('Erro ao enviar comunicado:', err);
+      showToast('Erro ao transmitir aviso aos clientes.', 'error');
+      return false;
+    }
+  };
+
+  const deleteBarberAnnouncement = async (id: string | number): Promise<boolean> => {
+    try {
+      const ok = await deleteNotificationFromSupabase(id);
+      if (ok) {
+        setSupabaseNotifications((prev) => prev.filter((n) => String(n.id) !== String(id)));
+        showToast('Aviso removido da tabela notifications do Supabase.', 'info');
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Erro ao excluir comunicado:', err);
+      return false;
+    }
+  };
 
   // Admin Auth Helpers
   const adminLogin = (user: string, pass: string): boolean => {
@@ -1992,6 +2109,10 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
         isAdminLoggedIn,
         isSupabaseConnected,
         refreshSupabaseAppointments,
+        supabaseNotifications,
+        sendBarberAnnouncement,
+        deleteBarberAnnouncement,
+        refreshSupabaseNotifications,
         activeView,
         clientActiveTab,
         adminActiveTab,

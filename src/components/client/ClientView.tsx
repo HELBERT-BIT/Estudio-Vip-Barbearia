@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { PWAInstallButton } from '../PWAInstallButton';
 import { PushNotificationBanner } from '../notifications/PushNotificationBanner';
+import { RealtimeNotificationsBanner } from './RealtimeNotificationsBanner';
 
 export const ClientView: React.FC = () => {
   const { 
@@ -155,6 +156,9 @@ export const ClientView: React.FC = () => {
           <span>Barbeiro ({stats.average}★)</span>
         </button>
       </div>
+
+      {/* Banner de Avisos em Tempo Real (Supabase Realtime) transmitidos pelo Barbeiro */}
+      <RealtimeNotificationsBanner />
 
       {/* ========================================================================= */}
       {/* ABA INÍCIO: HERO BANNER DESTACADO COM A IMAGEM REALÇADA DENTRO DO CARD    */}

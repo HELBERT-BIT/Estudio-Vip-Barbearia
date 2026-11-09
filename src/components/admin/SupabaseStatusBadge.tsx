@@ -74,6 +74,24 @@ CREATE POLICY "Permitir leitura publica client" ON client FOR SELECT USING (true
 CREATE POLICY "Permitir insercao publica client" ON client FOR INSERT WITH CHECK (true);
 CREATE POLICY "Permitir atualizacao publica client" ON client FOR UPDATE USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir delecao publica client" ON client FOR DELETE USING (true);
+
+-- 💈 3. Tabela de Avisos / Notificações em Tempo Real (notifications)
+CREATE TABLE IF NOT EXISTS notifications (
+  id BIGSERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  type TEXT DEFAULT 'aviso',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Ativar Realtime para notifications
+ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Permitir leitura publica notifications" ON notifications FOR SELECT USING (true);
+CREATE POLICY "Permitir insercao publica notifications" ON notifications FOR INSERT WITH CHECK (true);
+CREATE POLICY "Permitir atualizacao publica notifications" ON notifications FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Permitir delecao publica notifications" ON notifications FOR DELETE USING (true);
 `;
 
   const copySql = () => {
