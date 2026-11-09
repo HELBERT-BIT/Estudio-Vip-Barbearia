@@ -242,104 +242,168 @@ export async function fetchAppointmentsFromSupabase(): Promise<Appointment[] | n
 /**
  * Checks if a client already exists in the 'client' table in Supabase (by phone or email),
  * and if not, automatically inserts them using supabase.from('client').insert(...)
+ * 
+ * Target table: 'client' (singular)
+ * Expected columns: name, phone, email
  */
 export async function insertClientIfNotExistsToSupabase(clientData: {
   name: string;
   phone: string;
   email?: string;
 }): Promise<boolean> {
+  const clientName = (clientData.name || '').trim();
   const cleanPhone = (clientData.phone || '').trim();
   const rawDigits = cleanPhone.replace(/\D/g, '');
   const cleanEmail = (clientData.email || '').trim().toLowerCase();
-  const clientName = (clientData.name || '').trim();
+
+  console.log('🔍 [insertClientIfNotExistsToSupabase] Verificando dados para inserção na tabela client:', {
+    name: clientName,
+    phone: cleanPhone,
+    rawDigits,
+    email: cleanEmail || '(não informado)',
+  });
 
   if (!clientName && !cleanPhone && !cleanEmail) {
+    console.error('❌ [insertClientIfNotExistsToSupabase] Abortado: nome, telefone e email estão vazios.');
     return false;
   }
 
   try {
-    let exists = false;
+    let clientExists = false;
+    let existingRecord: any = null;
 
-    // 1. Check if client already exists in table 'client'
-    if (cleanPhone || cleanEmail) {
-      try {
-        let query = supabase.from('client').select('*').limit(5);
+    // 1. Verificação segura se o cliente já existe na tabela 'client'
+    // Consultas separadas e limpas para evitar erros de sintaxe no parser PostgREST com parênteses ou traços
+    try {
+      if (cleanPhone) {
+        const { data: byPhone, error: phoneErr } = await supabase
+          .from('client')
+          .select('id, name, phone, email')
+          .eq('phone', cleanPhone)
+          .limit(1);
 
-        if (cleanPhone && cleanEmail) {
-          query = query.or(`phone.eq.${cleanPhone},phone.eq.${rawDigits},email.ilike.${cleanEmail}`);
-        } else if (cleanPhone) {
-          query = query.or(`phone.eq.${cleanPhone},phone.eq.${rawDigits}`);
-        } else if (cleanEmail) {
-          query = query.ilike('email', cleanEmail);
+        if (phoneErr) {
+          console.error('⚠️ [insertClientIfNotExistsToSupabase] Erro ao buscar por phone formatado:', {
+            message: phoneErr.message,
+            code: phoneErr.code,
+            details: phoneErr.details,
+            hint: phoneErr.hint,
+          });
+        } else if (byPhone && byPhone.length > 0) {
+          clientExists = true;
+          existingRecord = byPhone[0];
         }
 
-        const { data: existingClients, error: checkError } = await query;
+        // Se não encontrou pelo formato com máscara, tenta pelos dígitos puros
+        if (!clientExists && rawDigits && rawDigits !== cleanPhone) {
+          const { data: byDigits, error: digitsErr } = await supabase
+            .from('client')
+            .select('id, name, phone, email')
+            .eq('phone', rawDigits)
+            .limit(1);
 
-        if (!checkError && existingClients && existingClients.length > 0) {
-          exists = true;
-        } else if (checkError) {
-          // Fallback if Portuguese columns (telefone/nome) were configured
-          try {
-            const { data: ptClients } = await supabase
-              .from('client')
-              .select('*')
-              .or(`telefone.eq.${cleanPhone},telefone.eq.${rawDigits},email.ilike.${cleanEmail}`)
-              .limit(1);
-            if (ptClients && ptClients.length > 0) {
-              exists = true;
-            }
-          } catch {
-            // Ignore error and proceed to insert
+          if (digitsErr) {
+            console.error('⚠️ [insertClientIfNotExistsToSupabase] Erro ao buscar por phone dígitos:', {
+              message: digitsErr.message,
+              code: digitsErr.code,
+            });
+          } else if (byDigits && byDigits.length > 0) {
+            clientExists = true;
+            existingRecord = byDigits[0];
           }
         }
-      } catch (checkErr) {
-        console.warn('Verificação de cliente existente na tabela client:', checkErr);
       }
+
+      // Se não encontrou por telefone e tem e-mail, busca por e-mail
+      if (!clientExists && cleanEmail) {
+        const { data: byEmail, error: emailErr } = await supabase
+          .from('client')
+          .select('id, name, phone, email')
+          .ilike('email', cleanEmail)
+          .limit(1);
+
+        if (emailErr) {
+          console.error('⚠️ [insertClientIfNotExistsToSupabase] Erro ao buscar por e-mail:', {
+            message: emailErr.message,
+            code: emailErr.code,
+          });
+        } else if (byEmail && byEmail.length > 0) {
+          clientExists = true;
+          existingRecord = byEmail[0];
+        }
+      }
+    } catch (checkEx) {
+      console.error('❌ [insertClientIfNotExistsToSupabase] Exceção durante a checagem prévia na tabela client:', checkEx);
     }
 
-    if (exists) {
-      console.log(`ℹ️ Cliente "${clientName}" (${cleanPhone}) já existe na tabela 'client' do Supabase.`);
+    if (clientExists) {
+      console.log(`ℹ️ [insertClientIfNotExistsToSupabase] Cliente já existe na tabela 'client' do Supabase:`, existingRecord);
       return true;
     }
 
-    // 2. Client does not exist: insert into 'client' (table name is singular as required)
-    const newClientPayload: Record<string, any> = {
+    // 2. Cliente NÃO existe: Montar objeto estritamente com as colunas da tabela: (name, phone, email)
+    // Sem campos extras para evitar erro de coluna inexistente no PostgreSQL
+    const clientPayload: {
+      name: string;
+      phone: string;
+      email: string | null;
+    } = {
       name: clientName,
       phone: cleanPhone,
-      email: cleanEmail || null,
-      created_at: new Date().toISOString(),
+      email: cleanEmail ? cleanEmail : null,
     };
 
-    const { error: insertError } = await supabase
+    console.log('🚀 [insertClientIfNotExistsToSupabase] Executando supabase.from(\'client\').insert(...) com payload exato:', clientPayload);
+
+    const { data: insertResult, error: insertError } = await supabase
       .from('client')
-      .insert([newClientPayload]);
+      .insert([clientPayload])
+      .select();
 
     if (insertError) {
-      // Fallback in case table columns are nome / telefone
+      console.error('❌ [insertClientIfNotExistsToSupabase] FALHA AO INSERIR CLIENTE NA TABELA client:', {
+        message: insertError.message,
+        details: insertError.details,
+        hint: insertError.hint,
+        code: insertError.code,
+        payloadEnviado: clientPayload,
+      });
+
+      // Tentativa de contingência 1: Se a tabela tiver colunas em português (nome, telefone, email)
       if (insertError.message && (insertError.message.includes('column') || insertError.code === '42703')) {
-        const ptPayload: Record<string, any> = {
+        console.warn('⚠️ [insertClientIfNotExistsToSupabase] Tentando fallback para colunas em português (nome, telefone, email)...');
+        const ptPayload = {
           nome: clientName,
           telefone: cleanPhone,
-          email: cleanEmail || null,
-          created_at: new Date().toISOString(),
+          email: cleanEmail ? cleanEmail : null,
         };
-        const { error: ptError } = await supabase.from('client').insert([ptPayload]);
+        const { data: ptResult, error: ptError } = await supabase
+          .from('client')
+          .insert([ptPayload])
+          .select();
+
         if (ptError) {
-          console.warn('Erro ao inserir cliente na tabela client (tentativa em português):', ptError.message || ptError);
+          console.error('❌ [insertClientIfNotExistsToSupabase] Fallback em português também falhou:', {
+            message: ptError.message,
+            details: ptError.details,
+            hint: ptError.hint,
+            code: ptError.code,
+            payloadEnviado: ptPayload,
+          });
           return false;
         }
-        console.log(`✅ Cliente "${clientName}" inserido com sucesso na tabela 'client' do Supabase.`);
+
+        console.log('✅ [insertClientIfNotExistsToSupabase] Sucesso via fallback na tabela client:', ptResult);
         return true;
       }
 
-      console.warn('Erro ao inserir cliente na tabela client do Supabase:', insertError.message || insertError);
       return false;
     }
 
-    console.log(`✅ Cliente "${clientName}" inserido com sucesso na tabela 'client' do Supabase.`);
+    console.log('✅ [insertClientIfNotExistsToSupabase] Cliente inserido com SUCESSO na tabela client:', insertResult);
     return true;
   } catch (err) {
-    console.warn('Exceção ao inserir cliente na tabela client do Supabase:', err);
+    console.error('❌ [insertClientIfNotExistsToSupabase] Exceção inesperada na rotina de cadastro de cliente:', err);
     return false;
   }
 }
@@ -352,52 +416,62 @@ export async function fetchClientsFromSupabase(): Promise<any[] | null> {
     const { data, error } = await supabase
       .from('client')
       .select('*')
-      .order('created_at', { ascending: false });
+      .limit(500);
 
     if (error) {
-      // Fallback without order if created_at does not exist
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from('client')
-        .select('*');
-      if (fallbackError) {
-        console.warn('Supabase fetchClients error:', fallbackError.message || fallbackError);
-        return null;
-      }
-      return fallbackData || [];
+      console.error('❌ [fetchClientsFromSupabase] Erro ao consultar tabela client:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
+      return null;
     }
 
     return data || [];
   } catch (err) {
-    console.warn('Network error fetching clients from Supabase:', err);
+    console.error('❌ [fetchClientsFromSupabase] Exceção de rede ao buscar clientes no Supabase:', err);
     return null;
   }
 }
 
 /**
- * Insert appointment into Supabase and automatically register client in 'client' table
+ * Insert appointment into Supabase and automatically register client in 'client' table (with await)
  */
 export async function insertAppointmentToSupabase(apt: Appointment): Promise<boolean> {
   try {
-    // Insere automaticamente na tabela 'client' caso o cliente ainda não exista
+    // 1. Garantir que os dados do cliente sejam inseridos primeiro na tabela 'client' usando AWAIT
     if (apt.clientName && (apt.clientPhone || apt.clientEmail)) {
-      insertClientIfNotExistsToSupabase({
-        name: apt.clientName,
-        phone: apt.clientPhone,
-        email: apt.clientEmail,
-      }).catch((err) => {
-        console.warn('insertClientIfNotExists non-blocking error:', err);
-      });
+      try {
+        console.log(`💈 [insertAppointmentToSupabase] Executando AWAIT para cadastrar cliente "${apt.clientName}" na tabela 'client'...`);
+        const clientSaved = await insertClientIfNotExistsToSupabase({
+          name: apt.clientName,
+          phone: apt.clientPhone,
+          email: apt.clientEmail,
+        });
+        console.log(`💈 [insertAppointmentToSupabase] Resultado da gravação do cliente: ${clientSaved ? 'SUCESSO' : 'ATENÇÃO'}`);
+      } catch (clientErr) {
+        console.error('❌ [insertAppointmentToSupabase] Exceção no AWAIT do insertClientIfNotExistsToSupabase:', clientErr);
+      }
     }
 
+    // 2. Inserir o agendamento na tabela 'appointments'
     const row = toSupabaseRow(apt);
-    const { error } = await supabase.from('appointments').insert([row]);
+    console.log(`💈 [insertAppointmentToSupabase] Gravando agendamento ${apt.id} em appointments...`);
+    const { data, error } = await supabase.from('appointments').insert([row]).select();
     if (error) {
-      console.warn('Supabase insertAppointment error:', error.message || error);
+      console.error('❌ [insertAppointmentToSupabase] Erro ao gravar agendamento em appointments:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
       return false;
     }
+    console.log(`✅ [insertAppointmentToSupabase] Agendamento ${apt.id} gravado com sucesso!`, data);
     return true;
   } catch (err) {
-    console.warn('Network error inserting appointment to Supabase:', err);
+    console.error('❌ [insertAppointmentToSupabase] Exceção geral ao gravar agendamento:', err);
     return false;
   }
 }

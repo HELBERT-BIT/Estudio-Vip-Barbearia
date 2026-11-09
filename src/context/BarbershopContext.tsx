@@ -668,13 +668,19 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
         return [result, ...prev];
       }
     });
-    // Salva na tabela 'client' do Supabase
+    // Salva na tabela 'client' do Supabase com await
     if (result! && result!.name && (result!.phone || result!.email)) {
-      insertClientIfNotExistsToSupabase({
-        name: result!.name,
-        phone: result!.phone,
-        email: result!.email,
-      }).catch((e) => console.warn('Erro ao sincronizar cliente com Supabase:', e));
+      (async () => {
+        try {
+          await insertClientIfNotExistsToSupabase({
+            name: result!.name,
+            phone: result!.phone,
+            email: result!.email,
+          });
+        } catch (e) {
+          console.error('❌ [addOrUpdateRegisteredClient] Erro ao sincronizar cliente com Supabase:', e);
+        }
+      })();
     }
 
     return result!;
@@ -1349,21 +1355,28 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
 
     setAppointments((prev) => [newAppointment, ...prev]);
 
-    // Persiste no Supabase em tempo real (aparece instantaneamente no celular e no PC admin)
-    insertAppointmentToSupabase(newAppointment).then((success) => {
-      if (success) {
-        setIsSupabaseConnected(true);
-      }
-    });
+    // Persiste no Supabase com AWAIT explícito e tratamento de erro detalhado
+    (async () => {
+      try {
+        console.log(`💈 [createAppointment] Iniciando persistência no Supabase para ${clientName}...`);
 
-    // Insere cliente na tabela 'client' do Supabase se ainda não existir
-    insertClientIfNotExistsToSupabase({
-      name: clientName,
-      phone: clientPhone,
-      email: clientEmail,
-    }).catch((err) => {
-      console.warn('Erro ao salvar cliente na tabela client do Supabase:', err);
-    });
+        // 1. Await na inserção do cliente na tabela 'client'
+        const clientInserted = await insertClientIfNotExistsToSupabase({
+          name: clientName,
+          phone: clientPhone,
+          email: clientEmail,
+        });
+        console.log(`💈 [createAppointment] Status da gravação do cliente na tabela 'client':`, clientInserted);
+
+        // 2. Await na inserção do agendamento na tabela 'appointments'
+        const apptInserted = await insertAppointmentToSupabase(newAppointment);
+        if (apptInserted) {
+          setIsSupabaseConnected(true);
+        }
+      } catch (saveErr) {
+        console.error('❌ [createAppointment] Falha na persistência assíncrona com o Supabase:', saveErr);
+      }
+    })();
 
     // Atualiza ou insere cliente na base de clientes cadastrados
     setRegisteredClients((prev) => {
