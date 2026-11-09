@@ -36,6 +36,8 @@ import {
   deleteAllAppointmentsFromSupabase,
   subscribeToAppointmentsRealtime,
   saveBarbershopStatusToSupabase,
+  insertClientIfNotExistsToSupabase,
+  fetchClientsFromSupabase,
   BarbershopGlobalStatus,
 } from '../lib/supabase';
 
@@ -456,7 +458,11 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
 
     const loadInitialData = async () => {
       try {
-        const result = await fetchAppointmentsAndStatusFromSupabase();
+        const [result, supabaseClients] = await Promise.all([
+          fetchAppointmentsAndStatusFromSupabase(),
+          fetchClientsFromSupabase(),
+        ]);
+
         if (result && isMounted) {
           setAppointments(result.appointments);
           if (result.statusConfig) {
@@ -468,6 +474,46 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
             }));
           }
           setIsSupabaseConnected(true);
+        }
+
+        // Sincroniza clientes vindos da tabela 'client' do Supabase
+        if (supabaseClients && Array.isArray(supabaseClients) && supabaseClients.length > 0 && isMounted) {
+          setRegisteredClients((prev) => {
+            const list = [...prev];
+            for (const sc of supabaseClients) {
+              const name = (sc.name || sc.nome || '').trim();
+              const phone = (sc.phone || sc.telefone || '').trim();
+              const email = (sc.email || '').trim().toLowerCase();
+              if (!name && !phone) continue;
+
+              const cleanPhone = phone.replace(/\D/g, '');
+              const existingIdx = list.findIndex(
+                (c) =>
+                  (cleanPhone && c.phone.replace(/\D/g, '') === cleanPhone) ||
+                  (email && c.email?.toLowerCase() === email)
+              );
+
+              if (existingIdx >= 0) {
+                list[existingIdx] = {
+                  ...list[existingIdx],
+                  name: name || list[existingIdx].name,
+                  phone: phone || list[existingIdx].phone,
+                  email: email || list[existingIdx].email,
+                };
+              } else {
+                list.push({
+                  id: String(sc.id || `cli-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`),
+                  name,
+                  phone,
+                  email: email || undefined,
+                  createdAt: sc.created_at || new Date().toISOString(),
+                  totalBookings: 1,
+                  totalSpent: 0,
+                });
+              }
+            }
+            return list;
+          });
         }
       } catch (e) {
         console.warn('Carregamento inicial do Supabase:', e);
@@ -622,6 +668,15 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
         return [result, ...prev];
       }
     });
+    // Salva na tabela 'client' do Supabase
+    if (result! && result!.name && (result!.phone || result!.email)) {
+      insertClientIfNotExistsToSupabase({
+        name: result!.name,
+        phone: result!.phone,
+        email: result!.email,
+      }).catch((e) => console.warn('Erro ao sincronizar cliente com Supabase:', e));
+    }
+
     return result!;
   };
 
@@ -1299,6 +1354,15 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
       if (success) {
         setIsSupabaseConnected(true);
       }
+    });
+
+    // Insere cliente na tabela 'client' do Supabase se ainda não existir
+    insertClientIfNotExistsToSupabase({
+      name: clientName,
+      phone: clientPhone,
+      email: clientEmail,
+    }).catch((err) => {
+      console.warn('Erro ao salvar cliente na tabela client do Supabase:', err);
     });
 
     // Atualiza ou insere cliente na base de clientes cadastrados

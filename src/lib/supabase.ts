@@ -240,10 +240,155 @@ export async function fetchAppointmentsFromSupabase(): Promise<Appointment[] | n
 }
 
 /**
- * Insert appointment into Supabase
+ * Checks if a client already exists in the 'client' table in Supabase (by phone or email),
+ * and if not, automatically inserts them using supabase.from('client').insert(...)
+ */
+export async function insertClientIfNotExistsToSupabase(clientData: {
+  name: string;
+  phone: string;
+  email?: string;
+}): Promise<boolean> {
+  const cleanPhone = (clientData.phone || '').trim();
+  const rawDigits = cleanPhone.replace(/\D/g, '');
+  const cleanEmail = (clientData.email || '').trim().toLowerCase();
+  const clientName = (clientData.name || '').trim();
+
+  if (!clientName && !cleanPhone && !cleanEmail) {
+    return false;
+  }
+
+  try {
+    let exists = false;
+
+    // 1. Check if client already exists in table 'client'
+    if (cleanPhone || cleanEmail) {
+      try {
+        let query = supabase.from('client').select('*').limit(5);
+
+        if (cleanPhone && cleanEmail) {
+          query = query.or(`phone.eq.${cleanPhone},phone.eq.${rawDigits},email.ilike.${cleanEmail}`);
+        } else if (cleanPhone) {
+          query = query.or(`phone.eq.${cleanPhone},phone.eq.${rawDigits}`);
+        } else if (cleanEmail) {
+          query = query.ilike('email', cleanEmail);
+        }
+
+        const { data: existingClients, error: checkError } = await query;
+
+        if (!checkError && existingClients && existingClients.length > 0) {
+          exists = true;
+        } else if (checkError) {
+          // Fallback if Portuguese columns (telefone/nome) were configured
+          try {
+            const { data: ptClients } = await supabase
+              .from('client')
+              .select('*')
+              .or(`telefone.eq.${cleanPhone},telefone.eq.${rawDigits},email.ilike.${cleanEmail}`)
+              .limit(1);
+            if (ptClients && ptClients.length > 0) {
+              exists = true;
+            }
+          } catch {
+            // Ignore error and proceed to insert
+          }
+        }
+      } catch (checkErr) {
+        console.warn('Verificação de cliente existente na tabela client:', checkErr);
+      }
+    }
+
+    if (exists) {
+      console.log(`ℹ️ Cliente "${clientName}" (${cleanPhone}) já existe na tabela 'client' do Supabase.`);
+      return true;
+    }
+
+    // 2. Client does not exist: insert into 'client' (table name is singular as required)
+    const newClientPayload: Record<string, any> = {
+      name: clientName,
+      phone: cleanPhone,
+      email: cleanEmail || null,
+      created_at: new Date().toISOString(),
+    };
+
+    const { error: insertError } = await supabase
+      .from('client')
+      .insert([newClientPayload]);
+
+    if (insertError) {
+      // Fallback in case table columns are nome / telefone
+      if (insertError.message && (insertError.message.includes('column') || insertError.code === '42703')) {
+        const ptPayload: Record<string, any> = {
+          nome: clientName,
+          telefone: cleanPhone,
+          email: cleanEmail || null,
+          created_at: new Date().toISOString(),
+        };
+        const { error: ptError } = await supabase.from('client').insert([ptPayload]);
+        if (ptError) {
+          console.warn('Erro ao inserir cliente na tabela client (tentativa em português):', ptError.message || ptError);
+          return false;
+        }
+        console.log(`✅ Cliente "${clientName}" inserido com sucesso na tabela 'client' do Supabase.`);
+        return true;
+      }
+
+      console.warn('Erro ao inserir cliente na tabela client do Supabase:', insertError.message || insertError);
+      return false;
+    }
+
+    console.log(`✅ Cliente "${clientName}" inserido com sucesso na tabela 'client' do Supabase.`);
+    return true;
+  } catch (err) {
+    console.warn('Exceção ao inserir cliente na tabela client do Supabase:', err);
+    return false;
+  }
+}
+
+/**
+ * Fetches clients from the 'client' table in Supabase
+ */
+export async function fetchClientsFromSupabase(): Promise<any[] | null> {
+  try {
+    const { data, error } = await supabase
+      .from('client')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      // Fallback without order if created_at does not exist
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('client')
+        .select('*');
+      if (fallbackError) {
+        console.warn('Supabase fetchClients error:', fallbackError.message || fallbackError);
+        return null;
+      }
+      return fallbackData || [];
+    }
+
+    return data || [];
+  } catch (err) {
+    console.warn('Network error fetching clients from Supabase:', err);
+    return null;
+  }
+}
+
+/**
+ * Insert appointment into Supabase and automatically register client in 'client' table
  */
 export async function insertAppointmentToSupabase(apt: Appointment): Promise<boolean> {
   try {
+    // Insere automaticamente na tabela 'client' caso o cliente ainda não exista
+    if (apt.clientName && (apt.clientPhone || apt.clientEmail)) {
+      insertClientIfNotExistsToSupabase({
+        name: apt.clientName,
+        phone: apt.clientPhone,
+        email: apt.clientEmail,
+      }).catch((err) => {
+        console.warn('insertClientIfNotExists non-blocking error:', err);
+      });
+    }
+
     const row = toSupabaseRow(apt);
     const { error } = await supabase.from('appointments').insert([row]);
     if (error) {

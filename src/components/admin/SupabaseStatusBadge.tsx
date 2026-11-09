@@ -18,9 +18,7 @@ export const SupabaseStatusBadge: React.FC<{ compact?: boolean }> = ({ compact =
     }, 600);
   };
 
-  const sqlScript = `-- 💈 Tabela de Agendamentos em Tempo Real - Estúdio VIP Barbearia
--- Execute no SQL Editor do seu Supabase (https://cmjrsttgfbjksxsyntf.supabase.co)
-
+  const sqlScript = `-- 💈 1. Tabela de Agendamentos em Tempo Real - Estúdio VIP Barbearia
 CREATE TABLE IF NOT EXISTS appointments (
   id TEXT PRIMARY KEY,
   client_name TEXT NOT NULL,
@@ -50,15 +48,32 @@ CREATE TABLE IF NOT EXISTS appointments (
   notes TEXT
 );
 
--- Ativar Realtime (para que os dados apareçam instantaneamente no telemóvel e no PC)
+-- Ativar Realtime para appointments
 ALTER PUBLICATION supabase_realtime ADD TABLE appointments;
 
--- Permissões de Leitura e Escrita
 ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Permitir leitura publica" ON appointments FOR SELECT USING (true);
-CREATE POLICY "Permitir insercao publica" ON appointments FOR INSERT WITH CHECK (true);
-CREATE POLICY "Permitir atualizacao publica" ON appointments FOR UPDATE USING (true) WITH CHECK (true);
-CREATE POLICY "Permitir delecao publica" ON appointments FOR DELETE USING (true);
+CREATE POLICY "Permitir leitura publica appointments" ON appointments FOR SELECT USING (true);
+CREATE POLICY "Permitir insercao publica appointments" ON appointments FOR INSERT WITH CHECK (true);
+CREATE POLICY "Permitir atualizacao publica appointments" ON appointments FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Permitir delecao publica appointments" ON appointments FOR DELETE USING (true);
+
+-- 💈 2. Tabela de Clientes Cadastrados (client - no singular)
+CREATE TABLE IF NOT EXISTS client (
+  id BIGSERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Ativar Realtime para client
+ALTER PUBLICATION supabase_realtime ADD TABLE client;
+
+ALTER TABLE client ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Permitir leitura publica client" ON client FOR SELECT USING (true);
+CREATE POLICY "Permitir insercao publica client" ON client FOR INSERT WITH CHECK (true);
+CREATE POLICY "Permitir atualizacao publica client" ON client FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Permitir delecao publica client" ON client FOR DELETE USING (true);
 `;
 
   const copySql = () => {
