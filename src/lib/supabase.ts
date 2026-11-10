@@ -645,8 +645,9 @@ export function normalizeNotificationRow(row: Record<string, any>): SupabaseNoti
 
 /**
  * Sends/inserts a new notification/announcement into Supabase 'notifications' table.
- * Strictly sends payload containing only { title, message, active: true },
- * explicitly excluding any 'type' property or Portuguese variants to avoid 400 Bad Request.
+ * Strictly sends payload containing only { title, message, active: true }.
+ * Does NOT include any manual 'id' property so the database handles autoincrement (Is Identity) automatically.
+ * Does NOT include any 'type' property or Portuguese variants to avoid 400 Bad Request.
  */
 export async function sendNotificationToSupabase(notif: {
   title: string;
@@ -662,13 +663,14 @@ export async function sendNotificationToSupabase(notif: {
   }
 
   try {
-    // Payload estritamente com apenas title, message e active: true (sem type para não gerar 400 Bad Request)
-    const payload = [{
+    // Payload estritamente com { title, message, active: true } SEM qualquer propriedade 'id'
+    // O banco de dados (Supabase / PostgreSQL) gera o ID autoincrement / IDENTITY automaticamente.
+    const payload: { title: string; message: string; active: boolean }[] = [{
       title,
       message,
       active: true,
     }];
-    console.log('🚀 [sendNotificationToSupabase] Executando await supabase.from("notifications").insert(...) com payload estrito:', payload);
+    console.log('🚀 [sendNotificationToSupabase] Inserindo em "notifications" (sem ID manual - autoincrement pelo banco):', payload);
 
     const { data, error } = await supabase
       .from('notifications')
