@@ -625,6 +625,7 @@ export interface SupabaseNotification {
   title: string;
   message: string;
   type?: string;
+  active?: boolean;
   created_at?: string;
 }
 
@@ -637,13 +638,14 @@ export function normalizeNotificationRow(row: Record<string, any>): SupabaseNoti
     title: row.title ?? row.titulo ?? 'Aviso da Barbearia',
     message: row.message ?? row.mensagem ?? row.content ?? row.texto ?? '',
     type: row.type ?? row.tipo ?? 'aviso',
+    active: row.active !== undefined ? Boolean(row.active) : true,
     created_at: row.created_at ?? row.data ?? new Date().toISOString(),
   };
 }
 
 /**
  * Sends/inserts a new notification/announcement into Supabase 'notifications' table.
- * All connected clients receive it instantly via Supabase Realtime.
+ * Uses exact schema: supabase.from('notifications').insert([{ title, message, active: true }]) with await.
  */
 export async function sendNotificationToSupabase(notif: {
   title: string;
@@ -652,7 +654,6 @@ export async function sendNotificationToSupabase(notif: {
 }): Promise<SupabaseNotification | null> {
   const title = (notif.title || '').trim();
   const message = (notif.message || '').trim();
-  const type = (notif.type || 'aviso').trim();
 
   if (!title || !message) {
     console.error('❌ [sendNotificationToSupabase] Título e mensagem são obrigatórios.');
@@ -660,99 +661,62 @@ export async function sendNotificationToSupabase(notif: {
   }
 
   try {
-    console.log('🚀 [sendNotificationToSupabase] Inserindo aviso na tabela notifications:', { title, message, type });
-
-    // Tentativa 1: Colunas padrão em inglês (title, message, type, created_at)
-    const payload = {
-      title,
-      message,
-      type,
-      created_at: new Date().toISOString(),
-    };
+    // Payload exato solicitado: [{ title, message, active: true }]
+    const payload = [{ title, message, active: true }];
+    console.log('🚀 [sendNotificationToSupabase] Executando await supabase.from("notifications").insert(...) com payload:', payload);
 
     const { data, error } = await supabase
       .from('notifications')
-      .insert([payload])
+      .insert(payload)
       .select();
 
-    if (!error && data && data.length > 0) {
-      const inserted = normalizeNotificationRow(data[0]);
-      console.log('✅ [sendNotificationToSupabase] Aviso gravado com sucesso no Supabase:', inserted);
-      return inserted;
-    }
-
     if (error) {
-      console.warn('⚠️ [sendNotificationToSupabase] Tentativa padrão falhou, testando variações de esquema:', error.message);
+      console.error('❌ [sendNotificationToSupabase] Erro retornado pelo Supabase ao gravar em notifications:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+        payloadEnviado: payload,
+      });
 
-      // Fallback 1: se as colunas forem em português (titulo, mensagem, tipo)
-      if (error.message && (error.message.includes('column') || error.code === '42703')) {
-        const ptPayload = {
-          titulo: title,
-          mensagem: message,
-          tipo: type,
-          created_at: new Date().toISOString(),
-        };
-        const { data: ptData, error: ptError } = await supabase
+      // Fallback de contingência caso a coluna 'active' não exista no banco de dados do Supabase
+      if (error.message && (error.message.includes('column "active"') || error.code === '42703')) {
+        console.warn('⚠️ [sendNotificationToSupabase] Coluna active não encontrada. Tentando envio de fallback sem active...');
+        const fallbackPayload = [{ title, message }];
+        const { data: fbData, error: fbError } = await supabase
           .from('notifications')
-          .insert([ptPayload])
+          .insert(fallbackPayload)
           .select();
 
-        if (!ptError && ptData && ptData.length > 0) {
-          const inserted = normalizeNotificationRow(ptData[0]);
-          console.log('✅ [sendNotificationToSupabase] Gravado com sucesso (esquema PT):', inserted);
+        if (!fbError && fbData && fbData.length > 0) {
+          const inserted = normalizeNotificationRow(fbData[0]);
+          console.log('✅ [sendNotificationToSupabase] Sucesso via fallback sem coluna active:', inserted);
           return inserted;
         }
 
-        // Fallback 2: coluna content em vez de message
-        const contentPayload = {
-          title,
-          content: message,
-          type,
-          created_at: new Date().toISOString(),
-        };
-        const { data: cData, error: cError } = await supabase
-          .from('notifications')
-          .insert([contentPayload])
-          .select();
-
-        if (!cError && cData && cData.length > 0) {
-          const inserted = normalizeNotificationRow(cData[0]);
-          console.log('✅ [sendNotificationToSupabase] Gravado com sucesso (esquema content):', inserted);
-          return inserted;
+        if (fbError) {
+          console.error('❌ [sendNotificationToSupabase] Falha também no fallback sem active:', fbError);
         }
-
-        // Fallback 3: payload simples apenas com title e message (sem created_at)
-        const simplePayload = {
-          title,
-          message,
-        };
-        const { data: sData, error: sError } = await supabase
-          .from('notifications')
-          .insert([simplePayload])
-          .select();
-
-        if (!sError && sData && sData.length > 0) {
-          const inserted = normalizeNotificationRow(sData[0]);
-          console.log('✅ [sendNotificationToSupabase] Gravado com sucesso (esquema simples):', inserted);
-          return inserted;
-        }
-
-        console.error('❌ [sendNotificationToSupabase] Todas as tentativas falharam:', {
-          original: error,
-          ptError,
-          cError,
-          sError,
-        });
-        return null;
       }
 
-      console.error('❌ [sendNotificationToSupabase] Erro ao gravar aviso na tabela notifications:', error);
       return null;
     }
 
-    return null;
+    const inserted = data && data.length > 0
+      ? normalizeNotificationRow(data[0])
+      : {
+          id: `notif-${Date.now()}`,
+          title,
+          message,
+          active: true,
+          type: 'aviso',
+          created_at: new Date().toISOString(),
+        };
+
+    console.log('✅ [sendNotificationToSupabase] Registro gravado com SUCESSO na tabela notifications:', inserted);
+    return inserted;
   } catch (err) {
-    console.error('❌ [sendNotificationToSupabase] Exceção inesperada:', err);
+    console.error('❌ [sendNotificationToSupabase] Exceção inesperada no envio de notificação:', err);
     return null;
   }
 }

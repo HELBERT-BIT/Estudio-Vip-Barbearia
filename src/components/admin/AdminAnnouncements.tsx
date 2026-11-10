@@ -83,10 +83,19 @@ export const AdminAnnouncements: React.FC = () => {
       return;
     }
 
+    console.log('📢 [AdminAnnouncements] Botão Enviar clicado. Iniciando envio com await:', {
+      title: title.trim(),
+      message: content.trim(),
+      active: true,
+      type,
+    });
+
     setIsSending(true);
     try {
-      // 1. Grava na tabela 'notifications' do Supabase em Tempo Real
+      // 1. Grava na tabela 'notifications' do Supabase em Tempo Real usando await
+      console.log('📢 [AdminAnnouncements] Chamando sendBarberAnnouncement com await...');
       const success = await sendBarberAnnouncement(title.trim(), content.trim(), type);
+      console.log('📢 [AdminAnnouncements] Resultado retornado por sendBarberAnnouncement:', success);
 
       if (success) {
         // 2. Também adiciona no mural geral do app
@@ -101,9 +110,11 @@ export const AdminAnnouncements: React.FC = () => {
 
         setTitle('');
         setContent('');
+      } else {
+        console.error('❌ [AdminAnnouncements] Falha ao enviar comunicado: sendBarberAnnouncement retornou false');
       }
     } catch (err) {
-      console.error(err);
+      console.error('❌ [AdminAnnouncements] Exceção capturada no envio do aviso:', err);
       showToast('Erro ao transmitir aviso aos clientes.', 'error');
     } finally {
       setIsSending(false);

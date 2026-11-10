@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   id BIGSERIAL PRIMARY KEY,
   title TEXT NOT NULL,
   message TEXT NOT NULL,
+  active BOOLEAN DEFAULT TRUE,
   type TEXT DEFAULT 'aviso',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );

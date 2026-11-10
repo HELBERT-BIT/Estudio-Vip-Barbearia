@@ -92,18 +92,18 @@ export const AnnouncementsFeed: React.FC = () => {
       </div>
 
       {/* SEÇÃO 1: Avisos em Tempo Real transmitidos pelo Barbeiro (Supabase Realtime) */}
-      {supabaseNotifications.length > 0 && (
+      {supabaseNotifications.filter((sn) => sn.active !== false).length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
               <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-              <span>Avisos Transmitidos Ao Vivo pelo Barbeiro ({supabaseNotifications.length})</span>
+              <span>Avisos Transmitidos Ao Vivo pelo Barbeiro ({supabaseNotifications.filter((sn) => sn.active !== false).length})</span>
             </h3>
             <span className="text-[11px] font-mono text-zinc-500">Supabase Realtime</span>
           </div>
 
           <div className="grid grid-cols-1 gap-3">
-            {supabaseNotifications.map((sn) => (
+            {supabaseNotifications.filter((sn) => sn.active !== false).map((sn) => (
               <div
                 key={sn.id}
                 className="p-5 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-zinc-900 to-zinc-950 shadow-lg space-y-2"

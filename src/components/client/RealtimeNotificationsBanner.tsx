@@ -26,7 +26,7 @@ export const RealtimeNotificationsBanner: React.FC = () => {
 
   // Most recent notification that hasn't been dismissed in this session
   const activeNotifs = supabaseNotifications.filter(
-    (n) => !dismissedIds.includes(String(n.id))
+    (n) => n.active !== false && !dismissedIds.includes(String(n.id))
   );
 
   const latestNotif = activeNotifs.length > 0 ? activeNotifs[0] : null;

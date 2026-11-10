@@ -676,9 +676,17 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     message: string,
     type: string = 'aviso'
   ): Promise<boolean> => {
+    console.log('📢 [BarbershopContext.sendBarberAnnouncement] Iniciando envio com AWAIT para Supabase:', {
+      title,
+      message,
+      type,
+    });
+
     try {
       const created = await sendNotificationToSupabase({ title, message, type });
       if (created) {
+        console.log('✅ [BarbershopContext.sendBarberAnnouncement] Sucesso retornado por sendNotificationToSupabase:', created);
+
         setSupabaseNotifications((prev) => [
           created,
           ...prev.filter((n) => String(n.id) !== String(created.id)),
@@ -700,10 +708,12 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
 
         return true;
       }
-      showToast('Falha ao gravar aviso na tabela notifications do Supabase.', 'error');
+
+      console.error('❌ [BarbershopContext.sendBarberAnnouncement] sendNotificationToSupabase retornou null.');
+      showToast('Falha ao gravar aviso na tabela notifications do Supabase. Verifique o console.', 'error');
       return false;
     } catch (err) {
-      console.error('Erro ao enviar comunicado:', err);
+      console.error('❌ [BarbershopContext.sendBarberAnnouncement] Exceção capturada:', err);
       showToast('Erro ao transmitir aviso aos clientes.', 'error');
       return false;
     }
