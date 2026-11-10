@@ -645,7 +645,8 @@ export function normalizeNotificationRow(row: Record<string, any>): SupabaseNoti
 
 /**
  * Sends/inserts a new notification/announcement into Supabase 'notifications' table.
- * Uses exact schema: supabase.from('notifications').insert([{ title, message, active: true }]) with await.
+ * Strictly sends payload containing only { title, message, active: true },
+ * explicitly excluding any 'type' property or Portuguese variants to avoid 400 Bad Request.
  */
 export async function sendNotificationToSupabase(notif: {
   title: string;
@@ -661,9 +662,13 @@ export async function sendNotificationToSupabase(notif: {
   }
 
   try {
-    // Payload exato solicitado: [{ title, message, active: true }]
-    const payload = [{ title, message, active: true }];
-    console.log('🚀 [sendNotificationToSupabase] Executando await supabase.from("notifications").insert(...) com payload:', payload);
+    // Payload estritamente com apenas title, message e active: true (sem type para não gerar 400 Bad Request)
+    const payload = [{
+      title,
+      message,
+      active: true,
+    }];
+    console.log('🚀 [sendNotificationToSupabase] Executando await supabase.from("notifications").insert(...) com payload estrito:', payload);
 
     const { data, error } = await supabase
       .from('notifications')
@@ -680,8 +685,11 @@ export async function sendNotificationToSupabase(notif: {
       });
 
       // Fallback de contingência caso a coluna 'active' não exista no banco de dados do Supabase
-      if (error.message && (error.message.includes('column "active"') || error.code === '42703')) {
-        console.warn('⚠️ [sendNotificationToSupabase] Coluna active não encontrada. Tentando envio de fallback sem active...');
+      if (
+        (error.message && (error.message.includes('column "active"') || error.code === '42703')) ||
+        error.code === 'PGRST204'
+      ) {
+        console.warn('⚠️ [sendNotificationToSupabase] Coluna active não encontrada. Tentando envio estrito apenas com title e message...');
         const fallbackPayload = [{ title, message }];
         const { data: fbData, error: fbError } = await supabase
           .from('notifications')
@@ -690,6 +698,7 @@ export async function sendNotificationToSupabase(notif: {
 
         if (!fbError && fbData && fbData.length > 0) {
           const inserted = normalizeNotificationRow(fbData[0]);
+          if (notif.type) inserted.type = notif.type;
           console.log('✅ [sendNotificationToSupabase] Sucesso via fallback sem coluna active:', inserted);
           return inserted;
         }
@@ -709,9 +718,14 @@ export async function sendNotificationToSupabase(notif: {
           title,
           message,
           active: true,
-          type: 'aviso',
+          type: notif.type || 'aviso',
           created_at: new Date().toISOString(),
         };
+
+    // Anexa o type em memória para a interface do cliente renderizar o badge correspondente
+    if (notif.type) {
+      inserted.type = notif.type;
+    }
 
     console.log('✅ [sendNotificationToSupabase] Registro gravado com SUCESSO na tabela notifications:', inserted);
     return inserted;

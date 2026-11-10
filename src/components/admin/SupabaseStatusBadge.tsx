@@ -81,7 +81,6 @@ CREATE TABLE IF NOT EXISTS notifications (
   title TEXT NOT NULL,
   message TEXT NOT NULL,
   active BOOLEAN DEFAULT TRUE,
-  type TEXT DEFAULT 'aviso',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
