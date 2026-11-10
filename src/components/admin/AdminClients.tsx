@@ -88,9 +88,14 @@ export const AdminClients: React.FC = () => {
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', `clientes_estudio_vip_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const container = typeof document !== 'undefined' ? document.body : null;
+    if (container && typeof container.appendChild === 'function') {
+      container.appendChild(link);
+      link.click();
+      container.removeChild(link);
+    } else {
+      link.click();
+    }
     URL.revokeObjectURL(url);
 
     showToast('Planilha de clientes exportada com sucesso (Excel/CSV)!', 'success', 'Exportação Concluída');
@@ -109,9 +114,14 @@ export const AdminClients: React.FC = () => {
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', `clientes_estudio_vip_${new Date().toISOString().slice(0, 10)}.json`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const container = typeof document !== 'undefined' ? document.body : null;
+    if (container && typeof container.appendChild === 'function') {
+      container.appendChild(link);
+      link.click();
+      container.removeChild(link);
+    } else {
+      link.click();
+    }
     URL.revokeObjectURL(url);
 
     showToast('Arquivo JSON de clientes exportado com sucesso!', 'success', 'Exportação Concluída');

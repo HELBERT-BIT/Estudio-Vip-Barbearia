@@ -256,9 +256,14 @@ export const AdminPayments: React.FC = () => {
     const link = document.createElement('a');
     link.href = url;
     link.download = `relatorio_financeiro_estudiovip_${periodName}_${todayStr}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const container = typeof document !== 'undefined' ? document.body : null;
+    if (container && typeof container.appendChild === 'function') {
+      container.appendChild(link);
+      link.click();
+      container.removeChild(link);
+    } else {
+      link.click();
+    }
     URL.revokeObjectURL(url);
   };
 

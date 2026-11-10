@@ -112,7 +112,7 @@ const pct = n => (n*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
 const unique = a => [...new Set(a.filter(x=>x!==null && x!==''))].sort((a,b)=>String(a).localeCompare(String(b),'pt-BR',{numeric:true}));
 const $ = id => document.getElementById(id);
 const loc = r => `${r.city}, ${r.state}`;
-function fill(id, values){let el=$(id);values.forEach(v=>{let o=document.createElement('option');o.value=v;o.textContent=v;el.appendChild(o)})}
+function fill(id, values){let el=$(id);if(!el)return;values.forEach(v=>{let o=document.createElement('option');o.value=v;o.textContent=v;if(el&&typeof el.appendChild==='function'){el.appendChild(o)}})}
 fill('modelFilter',unique(DATA.map(d=>d.model)));fill('stateFilter',unique(DATA.map(loc)));fill('yearFilter',unique(DATA.map(d=>d.year)));fill('payFilter',unique(DATA.map(d=>d.payment)));
 const chartColors=['#d5001c','#c9b58b','#8d989b','#e9e6de','#6d7477','#91414a','#647b78','#b6a7a0'];
 Chart.defaults.color='#a0a8aa';Chart.defaults.font.family='Inter, Arial, sans-serif';Chart.defaults.font.size=10;

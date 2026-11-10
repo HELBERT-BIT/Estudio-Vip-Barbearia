@@ -250,9 +250,14 @@ export const AdminAnalyticsCharts: React.FC<AdminAnalyticsChartsProps> = ({
     const link = document.createElement('a');
     link.href = url;
     link.download = `analise_desempenho_estudiovip_${periodMode}_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const container = typeof document !== 'undefined' ? document.body : null;
+    if (container && typeof container.appendChild === 'function') {
+      container.appendChild(link);
+      link.click();
+      container.removeChild(link);
+    } else {
+      link.click();
+    }
     URL.revokeObjectURL(url);
   };
 
