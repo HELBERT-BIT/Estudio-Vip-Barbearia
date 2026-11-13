@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode } from 'react';
 import { 
   BarberService, 
   BarbershopSettings, 
@@ -11,7 +11,8 @@ import {
   AppointmentStatus,
   WorkingDayConfig,
   BarberReview,
-  RegisteredClient
+  RegisteredClient,
+  NotificationDurationType
 } from '../types';
 import { 
   initialServices, 
@@ -44,6 +45,9 @@ import {
   subscribeToNotificationsRealtime,
   SupabaseNotification,
   BarbershopGlobalStatus,
+  NotificationDurationMeta,
+  getLocalNotificationMetaMap,
+  isNotificationValid,
 } from '../lib/supabase';
 
 export interface ToastMessage {
@@ -85,7 +89,14 @@ interface BarbershopContextType {
 
   // Avisos em Tempo Real do Supabase (Tabela notifications)
   supabaseNotifications: SupabaseNotification[];
-  sendBarberAnnouncement: (title: string, message: string, type?: string) => Promise<boolean>;
+  activeSupabaseNotifications: SupabaseNotification[];
+  sendBarberAnnouncement: (
+    title: string,
+    message: string,
+    type?: string,
+    durationType?: NotificationDurationType,
+    customMinutes?: number
+  ) => Promise<boolean>;
   deleteBarberAnnouncement: (id: string | number) => Promise<boolean>;
   refreshSupabaseNotifications: () => Promise<void>;
 
@@ -333,7 +344,38 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
   });
 
   // Avisos Oficiais em Tempo Real da tabela 'notifications' do Supabase
-  const [supabaseNotifications, setSupabaseNotifications] = useState<SupabaseNotification[]>([]);
+  const [rawSupabaseNotifications, setRawSupabaseNotifications] = useState<SupabaseNotification[]>([]);
+  const [notificationMetaById, setNotificationMetaById] = useState<Record<string, NotificationDurationMeta>>(
+    () => getLocalNotificationMetaMap()
+  );
+  const [expirationTick, setExpirationTick] = useState<number>(() => Date.now());
+  const lastManualStatusRef = useRef<'open' | 'closed' | 'auto'>('auto');
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setExpirationTick(Date.now());
+    }, 15000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const supabaseNotifications = useMemo(() => {
+    return rawSupabaseNotifications.map((n) => {
+      const meta = notificationMetaById[String(n.id)];
+      if (!meta) return n;
+      return {
+        ...n,
+        type: n.type && n.type !== 'aviso' ? n.type : meta.type || n.type || 'aviso',
+        expires_at: n.expires_at !== undefined ? n.expires_at : meta.expiresAt,
+        duration_type: n.duration_type ?? meta.durationType,
+        duration_label: n.duration_label ?? meta.durationLabel,
+      };
+    });
+  }, [rawSupabaseNotifications, notificationMetaById]);
+
+  const activeSupabaseNotifications = useMemo(() => {
+    const now = new Date(expirationTick);
+    return supabaseNotifications.filter((n) => isNotificationValid(n, now));
+  }, [supabaseNotifications, expirationTick]);
 
   // Estado de Autenticação Global do Administrador (Protege contra vazamento de botões/portas/alertas antes do login)
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
@@ -481,19 +523,26 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
         if (result && isMounted) {
           setAppointments(result.appointments);
           if (result.statusConfig) {
+            lastManualStatusRef.current = result.statusConfig.manualOverrideStatus;
             setSettings((prev) => ({
               ...prev,
               manualOverrideStatus: result.statusConfig!.manualOverrideStatus,
               blockedSlotsByDate: result.statusConfig!.blockedSlotsByDate || prev.blockedSlotsByDate,
               customUnlockedSlotsByDate: result.statusConfig!.customUnlockedSlotsByDate || prev.customUnlockedSlotsByDate,
             }));
+            if (result.statusConfig.notificationMetaById) {
+              setNotificationMetaById((prev) => ({
+                ...prev,
+                ...result.statusConfig!.notificationMetaById,
+              }));
+            }
           }
           setIsSupabaseConnected(true);
         }
 
         // Sincroniza avisos em tempo real vindos da tabela 'notifications' do Supabase
         if (supabaseNotifs && Array.isArray(supabaseNotifs) && isMounted) {
-          setSupabaseNotifications(supabaseNotifs);
+          setRawSupabaseNotifications(supabaseNotifs);
         }
 
         // Sincroniza clientes vindos da tabela 'client' do Supabase
@@ -588,6 +637,17 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
         }
       },
       (statusConfig: BarbershopGlobalStatus) => {
+        const previousOverride = lastManualStatusRef.current;
+        const overrideChanged = statusConfig.manualOverrideStatus !== previousOverride;
+        lastManualStatusRef.current = statusConfig.manualOverrideStatus;
+
+        if (statusConfig.notificationMetaById) {
+          setNotificationMetaById((prev) => ({
+            ...prev,
+            ...statusConfig.notificationMetaById,
+          }));
+        }
+
         setSettings((prev) => {
           let updatedWorkingDays = prev.workingDays;
           if (statusConfig.manualOverrideStatus === 'auto') {
@@ -607,16 +667,18 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
           };
         });
 
-        playNotificationChime();
-        showToast(
-          statusConfig.manualOverrideStatus === 'open'
-            ? 'Barbearia ABERTA em tempo real! Horários disponíveis.'
-            : statusConfig.manualOverrideStatus === 'closed'
-            ? 'Barbearia FECHADA em tempo real pelo proprietário!'
-            : 'Barbearia em modo AUTOMÁTICO de expediente.',
-          'info',
-          '⚡ Supabase Sincronizado'
-        );
+        if (overrideChanged) {
+          playNotificationChime();
+          showToast(
+            statusConfig.manualOverrideStatus === 'open'
+              ? 'Barbearia ABERTA em tempo real! Horários disponíveis.'
+              : statusConfig.manualOverrideStatus === 'closed'
+              ? 'Barbearia FECHADA em tempo real pelo proprietário!'
+              : 'Barbearia em modo AUTOMÁTICO de expediente.',
+            'info',
+            '⚡ Supabase Sincronizado'
+          );
+        }
       }
     );
 
@@ -624,31 +686,33 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     const unsubscribeNotifications = subscribeToNotificationsRealtime(
       (newNotif) => {
         console.log('⚡ [Realtime Notification Recebida pelo Cliente]:', newNotif);
-        setSupabaseNotifications((prev) => {
+        setRawSupabaseNotifications((prev) => {
           if (prev.some((n) => String(n.id) === String(newNotif.id))) return prev;
           return [newNotif, ...prev];
         });
 
-        // Som de sino suave de notificação
-        playNotificationChime();
+        if (isNotificationValid(newNotif)) {
+          // Som de sino suave de notificação
+          playNotificationChime();
 
-        // Alerta visual de aviso publicado pelo Mariano
-        showToast(
-          newNotif.message || newNotif.title,
-          'info',
-          `📢 ${newNotif.title}`
-        );
+          // Alerta visual de aviso publicado pelo Mariano
+          showToast(
+            newNotif.message || newNotif.title,
+            'info',
+            `📢 ${newNotif.title}`
+          );
 
-        // Dispara notificação push nativa para clientes com permissão ativada
-        sendPushNotificationToClients({
-          title: `💈 ${newNotif.title}`,
-          body: newNotif.message,
-          type: 'aviso_geral',
-          url: '/',
-        }).catch(() => {});
+          // Dispara notificação push nativa para clientes com permissão ativada
+          sendPushNotificationToClients({
+            title: `💈 ${newNotif.title}`,
+            body: newNotif.message,
+            type: 'aviso_geral',
+            url: '/',
+          }).catch(() => {});
+        }
       },
       (deletedId) => {
-        setSupabaseNotifications((prev) => prev.filter((n) => String(n.id) !== String(deletedId)));
+        setRawSupabaseNotifications((prev) => prev.filter((n) => String(n.id) !== String(deletedId)));
       }
     );
 
@@ -662,10 +726,20 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
   // Funções de Gestão de Avisos do Barbeiro (Tabela notifications)
   const refreshSupabaseNotifications = async (): Promise<void> => {
     try {
-      const data = await fetchNotificationsFromSupabase();
-      if (data) {
-        setSupabaseNotifications(data);
+      const [data, statusResult] = await Promise.all([
+        fetchNotificationsFromSupabase(),
+        fetchAppointmentsAndStatusFromSupabase(),
+      ]);
+      if (statusResult?.statusConfig?.notificationMetaById) {
+        setNotificationMetaById((prev) => ({
+          ...prev,
+          ...statusResult.statusConfig!.notificationMetaById,
+        }));
       }
+      if (data) {
+        setRawSupabaseNotifications(data);
+      }
+      setExpirationTick(Date.now());
     } catch (e) {
       console.warn('Erro ao atualizar avisos do Supabase:', e);
     }
@@ -674,20 +748,41 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
   const sendBarberAnnouncement = async (
     title: string,
     message: string,
-    type: string = 'aviso'
+    type: string = 'aviso',
+    durationType: NotificationDurationType = 'today',
+    customMinutes: number = 60
   ): Promise<boolean> => {
     console.log('📢 [BarbershopContext.sendBarberAnnouncement] Iniciando envio com AWAIT para Supabase:', {
       title,
       message,
       type,
+      durationType,
+      customMinutes,
     });
 
     try {
-      const created = await sendNotificationToSupabase({ title, message, type });
+      const created = await sendNotificationToSupabase({
+        title,
+        message,
+        type,
+        durationType,
+        customMinutes,
+      });
       if (created) {
         console.log('✅ [BarbershopContext.sendBarberAnnouncement] Sucesso retornado por sendNotificationToSupabase:', created);
 
-        setSupabaseNotifications((prev) => [
+        setNotificationMetaById((prev) => ({
+          ...prev,
+          [String(created.id)]: {
+            durationType: created.duration_type || durationType,
+            durationLabel: created.duration_label,
+            expiresAt: created.expires_at ?? null,
+            type: created.type || type,
+            createdAt: created.created_at,
+          },
+        }));
+
+        setRawSupabaseNotifications((prev) => [
           created,
           ...prev.filter((n) => String(n.id) !== String(created.id)),
         ]);
@@ -723,7 +818,12 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
     try {
       const ok = await deleteNotificationFromSupabase(id);
       if (ok) {
-        setSupabaseNotifications((prev) => prev.filter((n) => String(n.id) !== String(id)));
+        setRawSupabaseNotifications((prev) => prev.filter((n) => String(n.id) !== String(id)));
+        setNotificationMetaById((prev) => {
+          const next = { ...prev };
+          delete next[String(id)];
+          return next;
+        });
         showToast('Aviso removido da tabela notifications do Supabase.', 'info');
         return true;
       }
@@ -828,10 +928,12 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
 
   // Helper para persistir o status e horários no Supabase em tempo real
   const syncSettingsToSupabase = (s: BarbershopSettings) => {
+    lastManualStatusRef.current = s.manualOverrideStatus || 'auto';
     saveBarbershopStatusToSupabase({
       manualOverrideStatus: s.manualOverrideStatus || 'auto',
       blockedSlotsByDate: s.blockedSlotsByDate || {},
       customUnlockedSlotsByDate: s.customUnlockedSlotsByDate || {},
+      notificationMetaById,
     });
   };
 
@@ -2120,6 +2222,7 @@ export const BarbershopProvider: React.FC<{ children: ReactNode }> = ({ children
         isSupabaseConnected,
         refreshSupabaseAppointments,
         supabaseNotifications,
+        activeSupabaseNotifications,
         sendBarberAnnouncement,
         deleteBarberAnnouncement,
         refreshSupabaseNotifications,

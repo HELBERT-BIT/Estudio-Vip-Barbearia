@@ -106,6 +106,13 @@ export interface BarbershopSettings {
   slotIntervalMinutes?: number; // 15, 20, 30, 45, 60 min intervals
 }
 
+export type NotificationDurationType =
+  | 'minutes_hours'
+  | 'today'
+  | 'week'
+  | 'month'
+  | 'fixed';
+
 export interface Announcement {
   id: string;
   title: string;
@@ -114,6 +121,8 @@ export interface Announcement {
   date: string;
   active: boolean;
   important?: boolean;
+  durationType?: NotificationDurationType;
+  expiresAt?: string | null;
 }
 
 export interface AdminNotification {

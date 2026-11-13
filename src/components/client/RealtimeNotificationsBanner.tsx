@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useBarbershop } from '../../context/BarbershopContext';
 import { 
   Megaphone, 
@@ -8,13 +8,12 @@ import {
   X, 
   ChevronRight, 
   Radio, 
-  BellRing,
-  Info
+  Timer
 } from 'lucide-react';
-import { SupabaseNotification } from '../../lib/supabase';
+import { formatNotificationRemaining } from '../../lib/supabase';
 
 export const RealtimeNotificationsBanner: React.FC = () => {
-  const { supabaseNotifications, setClientActiveTab } = useBarbershop();
+  const { activeSupabaseNotifications, setClientActiveTab } = useBarbershop();
   const [dismissedIds, setDismissedIds] = useState<string[]>(() => {
     try {
       const saved = sessionStorage.getItem('estudiovip_dismissed_notifs');
@@ -24,9 +23,9 @@ export const RealtimeNotificationsBanner: React.FC = () => {
     }
   });
 
-  // Most recent notification that hasn't been dismissed in this session
-  const activeNotifs = supabaseNotifications.filter(
-    (n) => n.active !== false && !dismissedIds.includes(String(n.id))
+  // Apenas avisos ainda válidos (não expirados e dentro da validade escolhida) que não foram dispensados
+  const activeNotifs = activeSupabaseNotifications.filter(
+    (n) => !dismissedIds.includes(String(n.id))
   );
 
   const latestNotif = activeNotifs.length > 0 ? activeNotifs[0] : null;
@@ -108,6 +107,7 @@ export const RealtimeNotificationsBanner: React.FC = () => {
   if (!latestNotif) return null;
 
   const theme = getNoticeTheme(latestNotif.type);
+  const validityLabel = formatNotificationRemaining(latestNotif);
 
   return (
     <div className="w-full max-w-full animate-in fade-in slide-in-from-top-3 duration-300">
@@ -135,6 +135,11 @@ export const RealtimeNotificationsBanner: React.FC = () => {
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-900/80 text-zinc-400 border border-zinc-800 font-mono">
                   <Radio className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
                   <span>Ao Vivo • Supabase</span>
+                </span>
+
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-900/80 text-amber-300/90 border border-zinc-800">
+                  <Timer className="w-2.5 h-2.5 text-amber-400" />
+                  <span>{validityLabel}</span>
                 </span>
 
                 <span className="text-[11px] text-zinc-400 ml-auto sm:ml-0">

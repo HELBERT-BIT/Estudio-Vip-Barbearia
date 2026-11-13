@@ -72,7 +72,7 @@ export const ClientView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 sm:space-y-8 pb-16 w-full max-w-full">
+    <div className="space-y-4 sm:space-y-6 pb-4 w-full max-w-full">
       {/* ========================================================================= */}
       {/* BARRA DE NAVEGAÇÃO DE ABAS SUPERIOR (Mobile & Desktop)                    */}
       {/* ========================================================================= */}
@@ -157,15 +157,15 @@ export const ClientView: React.FC = () => {
         </button>
       </div>
 
-      {/* Banner de Avisos em Tempo Real (Supabase Realtime) transmitidos pelo Barbeiro */}
-      <RealtimeNotificationsBanner />
+      {/* Banner de Avisos em Tempo Real (Exibido fora do fluxo de agendamento/pagamento para manter foco total na ação) */}
+      {clientActiveTab !== 'booking' && <RealtimeNotificationsBanner />}
 
       {/* ========================================================================= */}
       {/* ABA INÍCIO: HERO BANNER DESTACADO COM A IMAGEM REALÇADA DENTRO DO CARD    */}
       {/* EXCLUSIVO DA TELA INICIAL (NÃO APARECE NAS OUTRAS ABAS)                   */}
       {/* ========================================================================= */}
       {clientActiveTab === 'home' && (
-        <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+        <div key="tab-home" className="space-y-6 sm:space-y-8 animate-in fade-in duration-200">
           {/* Card Principal Hero com Imagem 3D Realçada no Fundo do Quadrado */}
           <div className="relative overflow-hidden rounded-3xl border border-amber-500/40 shadow-2xl p-4 sm:p-8 md:p-10 bg-zinc-950/85 backdrop-blur-md max-w-full">
             
@@ -476,16 +476,104 @@ export const ClientView: React.FC = () => {
               <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
             </button>
           </div>
+
+          {/* Informações Institucionais da Barbearia (Exclusivas da Aba Início) */}
+          <footer className="rounded-2xl bg-zinc-950/90 backdrop-blur-md border border-zinc-800/80 p-5 sm:p-7 text-zinc-400 text-xs">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 sm:gap-8 mb-6">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+                    <Crown className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <span className="font-brand font-bold text-base text-zinc-100 tracking-wider">
+                    {settings.name}
+                  </span>
+                </div>
+                <p className="text-zinc-400 text-xs leading-relaxed italic">
+                  "{settings.tagline}"
+                </p>
+                <div className="pt-1">
+                  <a
+                    href="https://wa.me/556799440532"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 font-semibold text-xs border border-emerald-500/30 transition-colors"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>+55 67 9944-0532 - Mariano</span>
+                  </a>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-bold text-zinc-200 uppercase tracking-wider text-xs font-brand">
+                  Localização &amp; Contato
+                </h4>
+                <p className="flex items-start gap-2 text-zinc-400">
+                  <MapPin className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <span>
+                    {settings.address} <br />
+                    {settings.neighborhood} - {settings.city} <br />
+                    <span className="text-amber-400/90 text-[11px] font-medium">
+                      (Próximo à Escola Pedro Mendes Fontoura)
+                    </span>
+                  </span>
+                </p>
+                <p className="flex items-center gap-2 text-zinc-400 pt-1">
+                  <Phone className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <a href="https://wa.me/556799440532" target="_blank" rel="noreferrer" className="hover:underline font-mono text-zinc-200">
+                    +55 67 9944-0532 (Mariano)
+                  </a>
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-bold text-zinc-200 uppercase tracking-wider text-xs font-brand">
+                  Horário de Atendimento
+                </h4>
+                <p className="text-zinc-400">
+                  <strong className="text-zinc-300">Segunda a Sábado:</strong> <br />
+                  08:30h às 12:00h • 14:00h às 19:00h
+                </p>
+                <p className="text-zinc-400">
+                  <strong className="text-zinc-300">Domingo:</strong> Fechada
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-bold text-zinc-200 uppercase tracking-wider text-xs font-brand">
+                  Diferenciais Estúdio VIP
+                </h4>
+                <ul className="space-y-2 text-zinc-300">
+                  <li className="flex items-start gap-2 text-amber-300">
+                    <Coffee className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <span>Café quentinho &amp; água gelada de cortesia</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> Ambiente 100% climatizado
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" /> Cortes alinhados &amp; navalhados
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-zinc-900 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-zinc-500">
+              <p>© {new Date().getFullYear()} {settings.name}. Coxim - MS. Todos os direitos reservados.</p>
+              <p className="text-zinc-400 font-brand italic text-xs">"{settings.tagline}"</p>
+            </div>
+          </footer>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* OUTRAS ABAS: EXIBIDAS DIRETAMENTE NO TOPO (SEM O HERO CARD)              */}
+      {/* OUTRAS ABAS: EXIBIDAS DIRETAMENTE NO TOPO (SEM O HERO CARD E SEM RODAPÉ)  */}
       {/* ========================================================================= */}
 
       {/* Aba de Agendamento */}
       {clientActiveTab === 'booking' && (
-        <div className="animate-in fade-in duration-200">
+        <div key="tab-booking" className="animate-in fade-in duration-200">
           <BookingWizard 
             onBookingSuccess={() => setClientActiveTab('my-appointments')} 
             preSelectedServiceId={preSelectedServiceId}
@@ -495,28 +583,28 @@ export const ClientView: React.FC = () => {
 
       {/* Aba Meus Agendamentos */}
       {clientActiveTab === 'my-appointments' && (
-        <div className="animate-in fade-in duration-200">
+        <div key="tab-my-appointments" className="animate-in fade-in duration-200">
           <MyAppointments />
         </div>
       )}
 
       {/* Aba Mural de Avisos */}
       {clientActiveTab === 'announcements' && (
-        <div className="animate-in fade-in duration-200">
+        <div key="tab-announcements" className="animate-in fade-in duration-200">
           <AnnouncementsFeed />
         </div>
       )}
 
       {/* Aba Perfil do Barbeiro & Avaliações */}
       {clientActiveTab === 'barber' && (
-        <div className="animate-in fade-in duration-200">
+        <div key="tab-barber" className="animate-in fade-in duration-200">
           <BarberProfileView />
         </div>
       )}
 
       {/* Aba Tabela de Serviços & Preços */}
       {clientActiveTab === 'services' && (
-        <div className="space-y-6 animate-in fade-in duration-200">
+        <div key="tab-services" className="space-y-6 animate-in fade-in duration-200">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold font-brand text-zinc-100">

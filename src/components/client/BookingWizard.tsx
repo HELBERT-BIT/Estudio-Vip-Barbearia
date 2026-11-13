@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect } from 'react';
 import { useBarbershop } from '../../context/BarbershopContext';
 import { BarberService, PaymentMethod } from '../../types';
 import { getTodayString, getOffsetDateString } from '../../data/initialData';
@@ -50,6 +50,30 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
   } = useBarbershop();
 
   const [currentStep, setCurrentStep] = useState<number>(preSelectedServiceId ? 2 : 1);
+
+  // Sempre foca no topo exato da etapa atual ao avançar/voltar (especialmente no mobile entre Agendamento e Pagamento)
+  useLayoutEffect(() => {
+    if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    const resetViewportScroll = () => {
+      const viewport = document.getElementById('app-main-viewport');
+      if (viewport) {
+        viewport.scrollTo({ top: 0, behavior: 'auto' });
+      }
+      if (typeof window !== 'undefined') {
+        window.scrollTo(0, 0);
+      }
+    };
+    resetViewportScroll();
+    const rafId = typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame(resetViewportScroll) : null;
+    return () => {
+      if (rafId !== null && typeof cancelAnimationFrame !== 'undefined') {
+        cancelAnimationFrame(rafId);
+      }
+    };
+  }, [currentStep]);
+
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>(() => {
     if (preSelectedServiceId) return [preSelectedServiceId];
     return services[0]?.id ? [services[0].id] : [];
@@ -478,7 +502,7 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
       <div className="p-4 sm:p-6">
         {/* STEP 1: Select Service (Single or Combo) */}
         {currentStep === 1 && (
-          <div className="space-y-5">
+          <div key="wizard-step-1" className="space-y-5 animate-in fade-in duration-200">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-1">
               <div>
                 <h3 className="text-base sm:text-lg font-bold font-brand text-zinc-100 flex items-center gap-2">
@@ -693,7 +717,7 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
 
         {/* STEP 2: Client Details */}
         {currentStep === 2 && (
-          <div className="space-y-5 max-w-xl mx-auto">
+          <div key="wizard-step-2" className="space-y-5 max-w-xl mx-auto animate-in fade-in duration-200">
             <div className="text-center pb-2">
               <h4 className="text-lg font-bold text-zinc-100 font-brand">Seus Dados de Contato</h4>
               <p className="text-xs text-zinc-400 mt-1">
@@ -872,7 +896,7 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
 
         {/* STEP 3: Select Date & Time */}
         {currentStep === 3 && (
-          <div className="space-y-6">
+          <div key="wizard-step-3" className="space-y-6 animate-in fade-in duration-200">
             {/* Combo Services Summary Card */}
             {selectedServices.length > 0 && (
               <div className="p-4 rounded-2xl bg-zinc-950 border border-amber-500/30 space-y-3">
@@ -1158,7 +1182,7 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
 
         {/* STEP 4: Payment & Final Confirmation */}
         {currentStep === 4 && selectedServices.length > 0 && (
-          <div className="space-y-6">
+          <div key="wizard-step-4" className="space-y-6 animate-in fade-in duration-200">
             {/* Elegant Explanation Banner about the 50% Guarantee Fee */}
             <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-zinc-900 to-zinc-900 border border-amber-500/30 space-y-2">
               <div className="flex items-center gap-2.5">
@@ -1703,7 +1727,7 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
 
         {/* STEP 5: Success Confirmation Screen */}
         {currentStep === 5 && selectedServices.length > 0 && (
-          <div className="p-6 sm:p-8 text-center max-w-lg mx-auto space-y-6 animate-in zoom-in-95 duration-300">
+          <div key="wizard-step-5" className="p-6 sm:p-8 text-center max-w-lg mx-auto space-y-6 animate-in zoom-in-95 duration-300">
             <div className="w-20 h-20 rounded-full bg-emerald-500/20 border-2 border-emerald-500 text-emerald-400 mx-auto flex items-center justify-center shadow-xl shadow-emerald-500/20">
               <Check className="w-10 h-10" />
             </div>

@@ -81,6 +81,8 @@ CREATE TABLE IF NOT EXISTS notifications (
   title TEXT NOT NULL,
   message TEXT NOT NULL,
   active BOOLEAN DEFAULT TRUE,
+  expires_at TIMESTAMPTZ,
+  duration_type TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

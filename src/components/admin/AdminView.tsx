@@ -107,7 +107,7 @@ export const AdminView: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6 pb-16">
+    <div className="space-y-6 pb-4">
       {/* Top action bar: Tabs + Push Notification + Reset Test Data + Logout */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-zinc-800 gap-3 pb-3">
         {/* Navigation Pills */}
@@ -189,15 +189,17 @@ export const AdminView: React.FC = () => {
       </div>
 
       {/* Admin Views */}
-      {adminActiveTab === 'overview' && <AdminDashboard />}
-      {adminActiveTab === 'appointments' && <AdminSchedule />}
-      {adminActiveTab === 'clients' && <AdminClients />}
-      {adminActiveTab === 'services' && <AdminServices />}
-      {adminActiveTab === 'schedule' && <AdminHoursConfig />}
-      {adminActiveTab === 'payments' && <AdminPayments />}
-      {adminActiveTab === 'reviews' && <AdminReviewsManager />}
-      {adminActiveTab === 'announcements' && <AdminAnnouncements />}
-      {adminActiveTab === 'cancellations' && <AdminCancellationsLog />}
+      <div key={adminActiveTab} className="animate-in fade-in duration-200">
+        {adminActiveTab === 'overview' && <AdminDashboard />}
+        {adminActiveTab === 'appointments' && <AdminSchedule />}
+        {adminActiveTab === 'clients' && <AdminClients />}
+        {adminActiveTab === 'services' && <AdminServices />}
+        {adminActiveTab === 'schedule' && <AdminHoursConfig />}
+        {adminActiveTab === 'payments' && <AdminPayments />}
+        {adminActiveTab === 'reviews' && <AdminReviewsManager />}
+        {adminActiveTab === 'announcements' && <AdminAnnouncements />}
+        {adminActiveTab === 'cancellations' && <AdminCancellationsLog />}
+      </div>
 
       {/* Modals */}
       <AdminPushDispatcherModal

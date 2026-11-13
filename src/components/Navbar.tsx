@@ -36,7 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
     adminActiveTab, 
     setAdminActiveTab,
     notifications,
-    supabaseNotifications,
+    activeSupabaseNotifications,
     currentUser,
     appointments,
     simulateIncomingBooking,
@@ -57,8 +57,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
   ).length;
 
   return (
-    <>
-      <header className="sticky top-0 z-40 w-full bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80">
+    <header className="shrink-0 z-40 w-full bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800/80">
       {/* Top micro banner with business status & quick demo switch */}
       <div className="bg-zinc-900/60 border-b border-zinc-800/40 px-3 sm:px-4 py-1.5 text-xs">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
@@ -243,7 +242,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
             >
               <Megaphone className="w-3.5 h-3.5 shrink-0" />
               <span>Avisos</span>
-              {supabaseNotifications.length > 0 && (
+              {activeSupabaseNotifications.length > 0 && (
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5" title="Avisos ao vivo do barbeiro" />
               )}
             </button>
@@ -472,12 +471,35 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
         </div>
       )}
     </header>
+  );
+};
 
-    {/* Fixed Mobile Bottom Navigation Bar (Ultra-responsive for mobile devices) */}
-    {/* Somente renderiza abas admin se o usuário estiver autenticado como administrador */}
-    <nav 
+export const MobileBottomNav: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications }) => {
+  const {
+    activeView,
+    setActiveView,
+    clientActiveTab,
+    setClientActiveTab,
+    adminActiveTab,
+    setAdminActiveTab,
+    notifications,
+    activeSupabaseNotifications,
+    currentUser,
+    appointments,
+    isAdminLoggedIn,
+  } = useBarbershop();
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+  const clientActiveCount = appointments.filter(
+    (apt) =>
+      ['agendado', 'confirmado_presenca'].includes(apt.status) &&
+      (!currentUser || apt.clientPhone === currentUser.phone || apt.clientName === currentUser.name)
+  ).length;
+
+  return (
+    <nav
       aria-label="Navegação inferior mobile"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-800/80 px-2 py-1.5 flex items-center justify-around shadow-2xl safe-area-pb"
+      className="md:hidden shrink-0 z-40 w-full bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-800/80 px-2 py-1.5 flex items-center justify-around shadow-2xl"
     >
       {activeView === 'client' || !isAdminLoggedIn ? (
         <>
@@ -576,7 +598,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
           >
             <div className={`relative p-1 rounded-lg ${activeView === 'client' && clientActiveTab === 'announcements' ? 'bg-amber-500/20 text-amber-400' : ''}`}>
               <Megaphone className="w-5 h-5" />
-              {supabaseNotifications.length > 0 && (
+              {activeSupabaseNotifications.length > 0 && (
                 <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-pulse ring-2 ring-zinc-950" />
               )}
             </div>
@@ -681,6 +703,5 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onOpenNotifications 
         </>
       )}
     </nav>
-  </>
   );
 };

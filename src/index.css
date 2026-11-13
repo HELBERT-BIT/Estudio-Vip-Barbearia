@@ -1,6 +1,13 @@
 @import "tailwindcss";
 
 @layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   }
@@ -8,6 +15,11 @@
   h1, h2, h3, .font-brand {
     font-family: 'Cinzel', serif;
   }
+}
+
+.app-scroll-viewport {
+  overflow-anchor: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Custom dark barber scrollbar */

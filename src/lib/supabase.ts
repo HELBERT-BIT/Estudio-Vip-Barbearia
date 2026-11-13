@@ -1,11 +1,11 @@
 import { createClient, RealtimeChannel } from '@supabase/supabase-js';
-import { Appointment } from '../types';
+import { Appointment, NotificationDurationType } from '../types';
 
 export const SUPABASE_URL = 
-  import.meta.env.VITE_SUPABASE_URL || 'https://cmjrsttgfbjksxsyntf.supabase.co';
+  import.meta.env.VITE_SUPABASE_URL || 'https://jdiovwdlnngpikeromao.supabase.co';
 
 export const SUPABASE_ANON_KEY = 
-  import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_yRBVu-ie0l8esp4x0D00iQ_I7GWbS1H';
+  import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_ATuY167Zt0pt_cNkw5jPOg_IxD9ysye';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
@@ -104,12 +104,52 @@ export function fromSupabaseRow(row: Record<string, any>): Appointment {
 
 export const BARBERSHOP_STATUS_DOC_ID = 'system_barbershop_status';
 
+export interface NotificationDurationMeta {
+  durationType: NotificationDurationType;
+  durationLabel?: string;
+  expiresAt: string | null;
+  type?: string;
+  createdAt?: string;
+}
+
 export interface BarbershopGlobalStatus {
   manualOverrideStatus: 'open' | 'closed' | 'auto';
   blockedSlotsByDate?: Record<string, string[]>;
   customUnlockedSlotsByDate?: Record<string, string[]>;
+  notificationMetaById?: Record<string, NotificationDurationMeta>;
   updatedAt?: string;
 }
+
+const LOCAL_NOTIF_META_KEY = 'estudiovip_notif_meta_v1';
+
+export function getLocalNotificationMetaMap(): Record<string, NotificationDurationMeta> {
+  try {
+    if (typeof localStorage === 'undefined') return {};
+    const raw = localStorage.getItem(LOCAL_NOTIF_META_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function setLocalNotificationMetaMap(map: Record<string, NotificationDurationMeta>): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(LOCAL_NOTIF_META_KEY, JSON.stringify(map));
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
+// Cache em memória do último status global para preservar notificationMetaById ao salvar status/horários e vice-versa
+let cachedBarbershopStatus: BarbershopGlobalStatus = {
+  manualOverrideStatus: 'auto',
+  blockedSlotsByDate: {},
+  customUnlockedSlotsByDate: {},
+  notificationMetaById: getLocalNotificationMetaMap(),
+};
 
 /**
  * Checks if a row in the appointments table is the special system status record
@@ -140,21 +180,65 @@ export function parseBarbershopStatusFromRow(row: Record<string, any>): Barbersh
   const manualOverrideStatus: 'open' | 'closed' | 'auto' =
     rawStatus === 'open' || rawStatus === 'closed' ? rawStatus : 'auto';
 
-  return {
+  const remoteMeta =
+    notesData.notificationMetaById && typeof notesData.notificationMetaById === 'object'
+      ? (notesData.notificationMetaById as Record<string, NotificationDurationMeta>)
+      : {};
+
+  const parsed: BarbershopGlobalStatus = {
     manualOverrideStatus,
     blockedSlotsByDate: notesData.blockedSlotsByDate || {},
     customUnlockedSlotsByDate: notesData.customUnlockedSlotsByDate || {},
+    notificationMetaById: remoteMeta,
     updatedAt: notesData.updatedAt || row.created_at || new Date().toISOString(),
   };
+
+  cachedBarbershopStatus = {
+    ...parsed,
+    notificationMetaById: {
+      ...getLocalNotificationMetaMap(),
+      ...remoteMeta,
+    },
+  };
+  setLocalNotificationMetaMap(cachedBarbershopStatus.notificationMetaById || {});
+
+  return parsed;
 }
 
 /**
- * Saves the barbershop open/closed status and schedule slot blocks directly in Supabase
+ * Saves the barbershop open/closed status, schedule slot blocks, and notification expiration metadata directly in Supabase
  */
 export async function saveBarbershopStatusToSupabase(
   statusData: BarbershopGlobalStatus
 ): Promise<boolean> {
   try {
+    const mergedMeta: Record<string, NotificationDurationMeta> = {
+      ...(cachedBarbershopStatus.notificationMetaById || {}),
+      ...(statusData.notificationMetaById || {}),
+    };
+
+    // Limpa metadados expirados há mais de 30 dias para manter o JSON compacto
+    const cutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const prunedMeta: Record<string, NotificationDurationMeta> = {};
+    for (const [key, val] of Object.entries(mergedMeta)) {
+      if (!val) continue;
+      if (val.expiresAt) {
+        const expMs = new Date(val.expiresAt).getTime();
+        if (!isNaN(expMs) && expMs < cutoffMs) continue;
+      }
+      prunedMeta[key] = val;
+    }
+
+    cachedBarbershopStatus = {
+      manualOverrideStatus: statusData.manualOverrideStatus,
+      blockedSlotsByDate: statusData.blockedSlotsByDate ?? cachedBarbershopStatus.blockedSlotsByDate ?? {},
+      customUnlockedSlotsByDate:
+        statusData.customUnlockedSlotsByDate ?? cachedBarbershopStatus.customUnlockedSlotsByDate ?? {},
+      notificationMetaById: prunedMeta,
+      updatedAt: new Date().toISOString(),
+    };
+    setLocalNotificationMetaMap(prunedMeta);
+
     const payload = {
       id: BARBERSHOP_STATUS_DOC_ID,
       client_name: 'CONFIGURACAO_SISTEMA',
@@ -170,12 +254,13 @@ export async function saveBarbershopStatusToSupabase(
       payment_type: 'presencial',
       payment_method: 'pix',
       payment_status: 'pago',
-      status: statusData.manualOverrideStatus,
+      status: cachedBarbershopStatus.manualOverrideStatus,
       notes: JSON.stringify({
-        manualOverrideStatus: statusData.manualOverrideStatus,
-        blockedSlotsByDate: statusData.blockedSlotsByDate || {},
-        customUnlockedSlotsByDate: statusData.customUnlockedSlotsByDate || {},
-        updatedAt: new Date().toISOString(),
+        manualOverrideStatus: cachedBarbershopStatus.manualOverrideStatus,
+        blockedSlotsByDate: cachedBarbershopStatus.blockedSlotsByDate || {},
+        customUnlockedSlotsByDate: cachedBarbershopStatus.customUnlockedSlotsByDate || {},
+        notificationMetaById: prunedMeta,
+        updatedAt: cachedBarbershopStatus.updatedAt,
       }),
       created_at: new Date().toISOString(),
     };
@@ -190,6 +275,46 @@ export async function saveBarbershopStatusToSupabase(
     console.warn('Exceção ao salvar status da barbearia no Supabase:', err);
     return false;
   }
+}
+
+export async function saveNotificationMetaToSupabase(
+  id: string | number,
+  meta: NotificationDurationMeta
+): Promise<void> {
+  const key = String(id);
+  const currentMap = {
+    ...getLocalNotificationMetaMap(),
+    ...(cachedBarbershopStatus.notificationMetaById || {}),
+    [key]: meta,
+  };
+  setLocalNotificationMetaMap(currentMap);
+  cachedBarbershopStatus.notificationMetaById = currentMap;
+
+  await saveBarbershopStatusToSupabase({
+    manualOverrideStatus: cachedBarbershopStatus.manualOverrideStatus,
+    blockedSlotsByDate: cachedBarbershopStatus.blockedSlotsByDate,
+    customUnlockedSlotsByDate: cachedBarbershopStatus.customUnlockedSlotsByDate,
+    notificationMetaById: currentMap,
+  });
+}
+
+export async function removeNotificationMetaFromSupabase(id: string | number): Promise<void> {
+  const key = String(id);
+  const currentMap = {
+    ...getLocalNotificationMetaMap(),
+    ...(cachedBarbershopStatus.notificationMetaById || {}),
+  };
+  if (!(key in currentMap)) return;
+  delete currentMap[key];
+  setLocalNotificationMetaMap(currentMap);
+  cachedBarbershopStatus.notificationMetaById = currentMap;
+
+  await saveBarbershopStatusToSupabase({
+    manualOverrideStatus: cachedBarbershopStatus.manualOverrideStatus,
+    blockedSlotsByDate: cachedBarbershopStatus.blockedSlotsByDate,
+    customUnlockedSlotsByDate: cachedBarbershopStatus.customUnlockedSlotsByDate,
+    notificationMetaById: currentMap,
+  });
 }
 
 /**
@@ -283,12 +408,16 @@ export async function insertClientIfNotExistsToSupabase(clientData: {
           .limit(1);
 
         if (phoneErr) {
-          console.error('⚠️ [insertClientIfNotExistsToSupabase] Erro ao buscar por phone formatado:', {
-            message: phoneErr.message,
-            code: phoneErr.code,
-            details: phoneErr.details,
-            hint: phoneErr.hint,
-          });
+          if (isTransientNetworkError(phoneErr)) {
+            console.warn('⚠️ [insertClientIfNotExistsToSupabase] Falha temporária de rede ao buscar por phone formatado:', phoneErr.message);
+          } else {
+            console.error('⚠️ [insertClientIfNotExistsToSupabase] Erro ao buscar por phone formatado:', {
+              message: phoneErr.message,
+              code: phoneErr.code,
+              details: phoneErr.details,
+              hint: phoneErr.hint,
+            });
+          }
         } else if (byPhone && byPhone.length > 0) {
           clientExists = true;
           existingRecord = byPhone[0];
@@ -303,10 +432,14 @@ export async function insertClientIfNotExistsToSupabase(clientData: {
             .limit(1);
 
           if (digitsErr) {
-            console.error('⚠️ [insertClientIfNotExistsToSupabase] Erro ao buscar por phone dígitos:', {
-              message: digitsErr.message,
-              code: digitsErr.code,
-            });
+            if (isTransientNetworkError(digitsErr)) {
+              console.warn('⚠️ [insertClientIfNotExistsToSupabase] Falha temporária de rede ao buscar por phone dígitos:', digitsErr.message);
+            } else {
+              console.error('⚠️ [insertClientIfNotExistsToSupabase] Erro ao buscar por phone dígitos:', {
+                message: digitsErr.message,
+                code: digitsErr.code,
+              });
+            }
           } else if (byDigits && byDigits.length > 0) {
             clientExists = true;
             existingRecord = byDigits[0];
@@ -323,17 +456,25 @@ export async function insertClientIfNotExistsToSupabase(clientData: {
           .limit(1);
 
         if (emailErr) {
-          console.error('⚠️ [insertClientIfNotExistsToSupabase] Erro ao buscar por e-mail:', {
-            message: emailErr.message,
-            code: emailErr.code,
-          });
+          if (isTransientNetworkError(emailErr)) {
+            console.warn('⚠️ [insertClientIfNotExistsToSupabase] Falha temporária de rede ao buscar por e-mail:', emailErr.message);
+          } else {
+            console.error('⚠️ [insertClientIfNotExistsToSupabase] Erro ao buscar por e-mail:', {
+              message: emailErr.message,
+              code: emailErr.code,
+            });
+          }
         } else if (byEmail && byEmail.length > 0) {
           clientExists = true;
           existingRecord = byEmail[0];
         }
       }
     } catch (checkEx) {
-      console.error('❌ [insertClientIfNotExistsToSupabase] Exceção durante a checagem prévia na tabela client:', checkEx);
+      if (isTransientNetworkError(checkEx)) {
+        console.warn('⚠️ [insertClientIfNotExistsToSupabase] Falha temporária de rede durante a checagem prévia na tabela client:', checkEx);
+      } else {
+        console.error('❌ [insertClientIfNotExistsToSupabase] Exceção durante a checagem prévia na tabela client:', checkEx);
+      }
     }
 
     if (clientExists) {
@@ -408,6 +549,23 @@ export async function insertClientIfNotExistsToSupabase(clientData: {
   }
 }
 
+function isTransientNetworkError(errOrMsg: unknown): boolean {
+  const msg =
+    typeof errOrMsg === 'string'
+      ? errOrMsg
+      : (errOrMsg as { message?: string; details?: string } | null)?.message ||
+        (errOrMsg as { details?: string } | null)?.details ||
+        '';
+  const lower = String(msg).toLowerCase();
+  return (
+    lower.includes('failed to fetch') ||
+    lower.includes('networkerror') ||
+    lower.includes('network request failed') ||
+    lower.includes('load failed') ||
+    lower.includes('abort')
+  );
+}
+
 /**
  * Fetches clients from the 'client' table in Supabase
  */
@@ -419,18 +577,22 @@ export async function fetchClientsFromSupabase(): Promise<any[] | null> {
       .limit(500);
 
     if (error) {
-      console.error('❌ [fetchClientsFromSupabase] Erro ao consultar tabela client:', {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-      });
+      if (isTransientNetworkError(error)) {
+        console.warn('⚠️ [fetchClientsFromSupabase] Falha temporária de rede ao consultar tabela client:', error.message);
+      } else {
+        console.error('❌ [fetchClientsFromSupabase] Erro ao consultar tabela client:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+        });
+      }
       return null;
     }
 
     return data || [];
   } catch (err) {
-    console.error('❌ [fetchClientsFromSupabase] Exceção de rede ao buscar clientes no Supabase:', err);
+    console.warn('⚠️ [fetchClientsFromSupabase] Exceção de rede ao buscar clientes no Supabase:', err);
     return null;
   }
 }
@@ -627,35 +789,226 @@ export interface SupabaseNotification {
   type?: string;
   active?: boolean;
   created_at?: string;
+  expires_at?: string | null;
+  duration_type?: NotificationDurationType;
+  duration_label?: string;
+}
+
+// Armazena as colunas reais descobertas na tabela 'notifications' via select('*') / retorno de insert
+let knownNotificationColumns: Set<string> | null = null;
+
+function recordKnownNotificationColumns(row?: Record<string, any> | null): void {
+  if (!row || typeof row !== 'object') return;
+  const keys = Object.keys(row);
+  if (keys.length === 0) return;
+  if (!knownNotificationColumns) {
+    knownNotificationColumns = new Set<string>(keys);
+  } else {
+    keys.forEach((k) => knownNotificationColumns!.add(k));
+  }
+}
+
+export function getLocalDateKey(dateInput?: string | Date): string {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  if (isNaN(d.getTime())) {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function calculateNotificationExpiry(
+  durationType: NotificationDurationType,
+  customMinutes: number = 60,
+  referenceDate: Date = new Date()
+): { expiresAt: string | null; durationLabel: string } {
+  const now = new Date(referenceDate.getTime());
+
+  switch (durationType) {
+    case 'minutes_hours': {
+      const mins = Math.max(1, Math.round(customMinutes));
+      const exp = new Date(now.getTime() + mins * 60 * 1000);
+      const label =
+        mins >= 60 && mins % 60 === 0
+          ? `${mins / 60}h`
+          : mins > 60
+          ? `${Math.floor(mins / 60)}h ${mins % 60}min`
+          : `${mins} min`;
+      return { expiresAt: exp.toISOString(), durationLabel: `Temporário (${label})` };
+    }
+    case 'today': {
+      const endOfDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        23,
+        59,
+        59,
+        999
+      );
+      return { expiresAt: endOfDay.toISOString(), durationLabel: 'Apenas Hoje (até 23:59)' };
+    }
+    case 'week': {
+      const endOfWeek = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 7,
+        23,
+        59,
+        59,
+        999
+      );
+      return { expiresAt: endOfWeek.toISOString(), durationLabel: 'Durante a Semana (7 dias)' };
+    }
+    case 'month': {
+      const endOfMonth = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 30,
+        23,
+        59,
+        59,
+        999
+      );
+      return { expiresAt: endOfMonth.toISOString(), durationLabel: 'Durante o Mês (30 dias)' };
+    }
+    case 'fixed':
+      return { expiresAt: null, durationLabel: 'Fixo' };
+    default: {
+      const endOfDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        23,
+        59,
+        59,
+        999
+      );
+      return { expiresAt: endOfDay.toISOString(), durationLabel: 'Apenas Hoje (até 23:59)' };
+    }
+  }
 }
 
 /**
- * Normalizes rows from the notifications table (handling potential Portuguese or alternate column names)
+ * Checks whether a notification is still valid at `now`.
+ * Notices whose time has expired OR whose calendar day rolled over (when not explicitly 'fixed' or future-dated)
+ * automatically return false so they are never shown as fixed by default.
  */
-export function normalizeNotificationRow(row: Record<string, any>): SupabaseNotification {
+export function isNotificationValid(
+  notif: SupabaseNotification,
+  now: Date = new Date()
+): boolean {
+  if (!notif || notif.active === false) return false;
+
+  // Apenas avisos explicitamente marcados como 'fixed' permanecem indefinidamente
+  if (notif.duration_type === 'fixed') {
+    return true;
+  }
+
+  // Se possuir data/hora de expiração explícita
+  if (notif.expires_at) {
+    const expTime = new Date(notif.expires_at).getTime();
+    if (!isNaN(expTime)) {
+      if (now.getTime() > expTime) {
+        return false;
+      }
+      // Se for 'today', garante também que o dia local não virou
+      if (notif.duration_type === 'today' && notif.created_at) {
+        if (getLocalDateKey(notif.created_at) !== getLocalDateKey(now)) {
+          return false;
+        }
+      }
+      return true;
+    }
+  }
+
+  // Padrão sem expires_at e sem duration_type === 'fixed':
+  // NÃO fica fixo por padrão! Expira assim que o dia vira.
+  if (!notif.created_at) {
+    return false;
+  }
+
+  return getLocalDateKey(notif.created_at) === getLocalDateKey(now);
+}
+
+export function formatNotificationRemaining(
+  notif: SupabaseNotification,
+  now: Date = new Date()
+): string {
+  if (notif.duration_type === 'fixed') return 'Aviso Fixo';
+  if (!isNotificationValid(notif, now)) return 'Expirado';
+
+  if (notif.expires_at) {
+    const expMs = new Date(notif.expires_at).getTime();
+    const diffMs = expMs - now.getTime();
+    if (diffMs <= 0) return 'Expirado';
+
+    const diffMins = Math.ceil(diffMs / 60000);
+    if (diffMins < 60) return `Expira em ${diffMins} min`;
+
+    const diffHours = Math.floor(diffMins / 60);
+    const remMins = diffMins % 60;
+    if (diffHours < 24 && getLocalDateKey(notif.expires_at) === getLocalDateKey(now)) {
+      if (notif.duration_type === 'today') return 'Válido hoje (até 23:59)';
+      return remMins > 0 ? `Expira em ${diffHours}h ${remMins}m` : `Expira em ${diffHours}h`;
+    }
+
+    const diffDays = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+    return diffDays === 1 ? 'Válido até amanhã' : `Válido por ${diffDays} dias`;
+  }
+
+  return 'Válido hoje (até 23:59)';
+}
+
+/**
+ * Normalizes rows from the notifications table and merges any locally/remotely stored duration metadata
+ */
+export function normalizeNotificationRow(
+  row: Record<string, any>,
+  metaMap?: Record<string, NotificationDurationMeta>
+): SupabaseNotification {
+  recordKnownNotificationColumns(row);
+
+  const id = row.id ?? `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+  const lookupMeta = (metaMap || cachedBarbershopStatus.notificationMetaById || getLocalNotificationMetaMap())[String(id)];
+
   return {
-    id: row.id ?? `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    id,
     title: row.title ?? row.titulo ?? 'Aviso da Barbearia',
     message: row.message ?? row.mensagem ?? row.content ?? row.texto ?? '',
-    type: row.type ?? row.tipo ?? 'aviso',
+    type: row.type ?? row.tipo ?? lookupMeta?.type ?? 'aviso',
     active: row.active !== undefined ? Boolean(row.active) : true,
-    created_at: row.created_at ?? row.data ?? new Date().toISOString(),
+    created_at: row.created_at ?? row.data ?? lookupMeta?.createdAt ?? new Date().toISOString(),
+    expires_at: row.expires_at !== undefined ? row.expires_at : (lookupMeta?.expiresAt ?? undefined),
+    duration_type: (row.duration_type ?? lookupMeta?.durationType) as NotificationDurationType | undefined,
+    duration_label: lookupMeta?.durationLabel,
   };
 }
 
 /**
  * Sends/inserts a new notification/announcement into Supabase 'notifications' table.
- * Strictly sends payload containing only { title, message, active: true }.
- * Does NOT include any manual 'id' property so the database handles autoincrement (Is Identity) automatically.
- * Does NOT include any 'type' property or Portuguese variants to avoid 400 Bad Request.
+ * Strictly sends only confirmed existing table columns ({ title, message, active: true },
+ * plus expires_at / duration_type ONLY if those columns are confirmed to exist in the table),
+ * NEVER sending a manual 'id' so PostgreSQL handles autoincrement (Is Identity).
+ * Persists expiration metadata across devices via BarbershopGlobalStatus as well.
  */
 export async function sendNotificationToSupabase(notif: {
   title: string;
   message: string;
   type?: string;
+  durationType?: NotificationDurationType;
+  customMinutes?: number;
 }): Promise<SupabaseNotification | null> {
   const title = (notif.title || '').trim();
   const message = (notif.message || '').trim();
+  const durationType: NotificationDurationType = notif.durationType || 'today';
+  const { expiresAt, durationLabel } = calculateNotificationExpiry(
+    durationType,
+    notif.customMinutes || 60
+  );
 
   if (!title || !message) {
     console.error('❌ [sendNotificationToSupabase] Título e mensagem são obrigatórios.');
@@ -663,14 +1016,32 @@ export async function sendNotificationToSupabase(notif: {
   }
 
   try {
-    // Payload estritamente com { title, message, active: true } SEM qualquer propriedade 'id'
-    // O banco de dados (Supabase / PostgreSQL) gera o ID autoincrement / IDENTITY automaticamente.
-    const payload: { title: string; message: string; active: boolean }[] = [{
+    // Monta o payload estritamente com as colunas reais da tabela notifications.
+    // NUNCA inclui 'id' para não causar erro de chave primária / identity.
+    // Só inclui expires_at / duration_type se já confirmamos que essas colunas existem no banco.
+    const rowPayload: Record<string, any> = {
       title,
       message,
       active: true,
-    }];
-    console.log('🚀 [sendNotificationToSupabase] Inserindo em "notifications" (sem ID manual - autoincrement pelo banco):', payload);
+    };
+
+    if (knownNotificationColumns?.has('expires_at')) {
+      rowPayload.expires_at = expiresAt;
+    }
+    if (knownNotificationColumns?.has('duration_type')) {
+      rowPayload.duration_type = durationType;
+    }
+
+    const payload = [rowPayload];
+    console.log(
+      '🚀 [sendNotificationToSupabase] Executando await supabase.from("notifications").insert(...) com payload estrito:',
+      {
+        payload,
+        knownColumns: knownNotificationColumns ? Array.from(knownNotificationColumns) : 'pendente (tabela vazia ou inicial)',
+        durationType,
+        expiresAt,
+      }
+    );
 
     const { data, error } = await supabase
       .from('notifications')
@@ -691,30 +1062,86 @@ export async function sendNotificationToSupabase(notif: {
         (error.message && (error.message.includes('column "active"') || error.code === '42703')) ||
         error.code === 'PGRST204'
       ) {
-        console.warn('⚠️ [sendNotificationToSupabase] Coluna active não encontrada. Tentando envio estrito apenas com title e message...');
-        const fallbackPayload = [{ title, message }];
-        const { data: fbData, error: fbError } = await supabase
-          .from('notifications')
-          .insert(fallbackPayload)
-          .select();
+        console.warn('⚠️ [sendNotificationToSupabase] Coluna incompatível detectada. Tentando envio estrito mínimo { title, message }...');
+        try {
+          const fallbackPayload = [{ title, message }];
+          const { data: fbData, error: fbError } = await supabase
+            .from('notifications')
+            .insert(fallbackPayload)
+            .select();
 
-        if (!fbError && fbData && fbData.length > 0) {
-          const inserted = normalizeNotificationRow(fbData[0]);
-          if (notif.type) inserted.type = notif.type;
-          console.log('✅ [sendNotificationToSupabase] Sucesso via fallback sem coluna active:', inserted);
-          return inserted;
-        }
+          if (fbError) {
+            console.error('❌ [sendNotificationToSupabase] Falha também no fallback mínimo { title, message }:', {
+              message: fbError.message,
+              details: fbError.details,
+              hint: fbError.hint,
+              code: fbError.code,
+              fallbackPayload,
+            });
+            return null;
+          }
 
-        if (fbError) {
-          console.error('❌ [sendNotificationToSupabase] Falha também no fallback sem active:', fbError);
+          if (fbData && fbData.length > 0) {
+            recordKnownNotificationColumns(fbData[0]);
+            const inserted = normalizeNotificationRow(fbData[0]);
+            inserted.type = notif.type || inserted.type || 'aviso';
+            inserted.duration_type = durationType;
+            inserted.expires_at = expiresAt;
+            inserted.duration_label = durationLabel;
+
+            await saveNotificationMetaToSupabase(inserted.id, {
+              durationType,
+              durationLabel,
+              expiresAt,
+              type: inserted.type,
+              createdAt: inserted.created_at,
+            });
+
+            console.log('✅ [sendNotificationToSupabase] Sucesso via fallback mínimo:', inserted);
+            return inserted;
+          }
+        } catch (fbCatchErr) {
+          console.error('❌ [sendNotificationToSupabase] Exceção no fallback mínimo:', fbCatchErr);
+          return null;
         }
       }
 
       return null;
     }
 
-    const inserted = data && data.length > 0
-      ? normalizeNotificationRow(data[0])
+    let insertedRow: Record<string, any> | null =
+      data && data.length > 0 ? data[0] : null;
+
+    if (insertedRow) {
+      recordKnownNotificationColumns(insertedRow);
+
+      // Se agora descobrimos que a tabela possui expires_at / duration_type e não havíamos enviado no insert inicial, atualiza com segurança
+      const extraPatch: Record<string, any> = {};
+      if (knownNotificationColumns?.has('expires_at') && rowPayload.expires_at === undefined) {
+        extraPatch.expires_at = expiresAt;
+      }
+      if (knownNotificationColumns?.has('duration_type') && rowPayload.duration_type === undefined) {
+        extraPatch.duration_type = durationType;
+      }
+      if (Object.keys(extraPatch).length > 0 && insertedRow.id !== undefined) {
+        try {
+          const { error: patchErr } = await supabase
+            .from('notifications')
+            .update(extraPatch)
+            .eq('id', insertedRow.id);
+          if (patchErr) {
+            console.warn('⚠️ [sendNotificationToSupabase] Não foi possível atualizar colunas opcionais de validade:', patchErr);
+          } else {
+            insertedRow = { ...insertedRow, ...extraPatch };
+          }
+        } catch (patchCatch) {
+          console.warn('⚠️ [sendNotificationToSupabase] Exceção ao atualizar colunas opcionais:', patchCatch);
+        }
+      }
+    }
+
+    const inserted: SupabaseNotification = insertedRow
+      ? normalizeNotificationRow(insertedRow)
       : {
           id: `notif-${Date.now()}`,
           title,
@@ -722,11 +1149,27 @@ export async function sendNotificationToSupabase(notif: {
           active: true,
           type: notif.type || 'aviso',
           created_at: new Date().toISOString(),
+          expires_at: expiresAt,
+          duration_type: durationType,
+          duration_label: durationLabel,
         };
 
-    // Anexa o type em memória para a interface do cliente renderizar o badge correspondente
-    if (notif.type) {
-      inserted.type = notif.type;
+    // Garante aplicação imediata da validade e tipo em memória + sincronização entre dispositivos
+    inserted.type = notif.type || inserted.type || 'aviso';
+    inserted.duration_type = durationType;
+    inserted.expires_at = expiresAt;
+    inserted.duration_label = durationLabel;
+
+    try {
+      await saveNotificationMetaToSupabase(inserted.id, {
+        durationType,
+        durationLabel,
+        expiresAt,
+        type: inserted.type,
+        createdAt: inserted.created_at,
+      });
+    } catch (metaErr) {
+      console.error('⚠️ [sendNotificationToSupabase] Erro ao salvar metadados de expiração sincronizados:', metaErr);
     }
 
     console.log('✅ [sendNotificationToSupabase] Registro gravado com SUCESSO na tabela notifications:', inserted);
@@ -749,20 +1192,39 @@ export async function fetchNotificationsFromSupabase(): Promise<SupabaseNotifica
       .limit(30);
 
     if (error) {
-      // Fallback sem ordenação de created_at caso o nome da coluna de data seja diferente
+      // Se for erro de rede (ex: Failed to fetch), não tenta query de fallback desnecessária
+      if (isTransientNetworkError(error)) {
+        console.warn('⚠️ [fetchNotificationsFromSupabase] Falha temporária de rede ao carregar avisos:', error.message);
+        return null;
+      }
+
+      console.warn('⚠️ [fetchNotificationsFromSupabase] Erro com order(created_at), tentando fallback:', {
+        message: error.message,
+        details: error.details,
+        code: error.code,
+      });
+
       const { data: fbData, error: fbError } = await supabase
         .from('notifications')
         .select('*')
         .limit(30);
 
       if (fbError) {
-        console.warn('⚠️ [fetchNotificationsFromSupabase] Erro ao carregar avisos:', fbError.message);
+        if (isTransientNetworkError(fbError)) {
+          console.warn('⚠️ [fetchNotificationsFromSupabase] Falha temporária de rede no fallback:', fbError.message);
+        } else {
+          console.error('❌ [fetchNotificationsFromSupabase] Erro ao carregar avisos:', {
+            message: fbError.message,
+            details: fbError.details,
+            code: fbError.code,
+          });
+        }
         return null;
       }
-      return (fbData || []).map(normalizeNotificationRow);
+      return (fbData || []).map((row) => normalizeNotificationRow(row));
     }
 
-    return (data || []).map(normalizeNotificationRow);
+    return (data || []).map((row) => normalizeNotificationRow(row));
   } catch (err) {
     console.warn('⚠️ [fetchNotificationsFromSupabase] Exceção de rede:', err);
     return null;
@@ -780,9 +1242,15 @@ export async function deleteNotificationFromSupabase(id: string | number): Promi
       .eq('id', id);
 
     if (error) {
-      console.error('❌ [deleteNotificationFromSupabase] Erro ao excluir aviso:', error);
+      console.error('❌ [deleteNotificationFromSupabase] Erro ao excluir aviso:', {
+        message: error.message,
+        details: error.details,
+        code: error.code,
+      });
       return false;
     }
+
+    await removeNotificationMetaFromSupabase(id);
     console.log(`✅ [deleteNotificationFromSupabase] Aviso ${id} removido com sucesso.`);
     return true;
   } catch (err) {
